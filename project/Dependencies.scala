@@ -176,6 +176,12 @@ object Dependencies {
     protoSchemasLib        % "protobuf"
   )
 
+  lazy val `node-tools`: Seq[ModuleID] = Seq(
+    "io.getquill" %% "quill-jdbc" % "3.1.0",
+    "com.h2database" % "h2" % "1.4.192",
+    "org.scalaj" %% "scalaj-http" % "2.4.2"
+  )
+
   lazy val circe = Def.setting {
     val circeVersion = "0.12.0-RC4"
     Seq(
