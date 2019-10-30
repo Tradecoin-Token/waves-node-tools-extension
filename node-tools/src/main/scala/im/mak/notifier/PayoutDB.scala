@@ -38,7 +38,6 @@ object PayoutDB extends ScorexLogging {
       fromHeight: Int,
       toHeight: Int,
       amount: Long,
-      assetId: Option[String],
       generatingBalance: Long,
       activeLeases: Array[Byte],
       txId: Option[String],
@@ -72,7 +71,7 @@ object PayoutDB extends ScorexLogging {
           .update(v => v.reward -> (v.reward + liftQ(reward)))
       }
     log.info(
-      s"Block at $height reward is ${Format.waves(existing.fold(0L)(_.reward) + reward)} Waves"
+      s"Block reward at height $height is ${Format.waves(existing.fold(0L)(_.reward) + reward)} Waves"
     )
     run(q)
   }
@@ -101,7 +100,6 @@ object PayoutDB extends ScorexLogging {
       fromHeight: Int,
       toHeight: Int,
       amount: Long,
-      assetId: Option[String],
       generatingBalance: Long,
       activeLeases: Seq[LeaseTransaction]
   ): Int = {
@@ -112,14 +110,13 @@ object PayoutDB extends ScorexLogging {
           _.fromHeight        -> liftQ(fromHeight),
           _.toHeight          -> liftQ(toHeight),
           _.amount            -> liftQ(amount),
-          _.assetId           -> liftQ(assetId),
           _.generatingBalance -> liftQ(generatingBalance),
           _.activeLeases      -> liftQ(snapshotBytes)
         )
         .returning(_.id)
     }
     val id = run(q)
-    log.info(s"Payout registered: #$id ($fromHeight - $toHeight, $amount of ${Asset.fromString(assetId)}, ${activeLeases.length} leases)")
+    log.info(s"Payout registered: #$id ($fromHeight - $toHeight, $amount Waves, ${activeLeases.length} leases)")
     id
   }
 
