@@ -7,7 +7,7 @@ create table if not exists payouts (
   id int4 primary key auto_increment not null,
   from_height int4 not null,
   to_height int4 not null,
-  reward int8 not null,
+  amount int8 not null,
   generating_balance int8 not null,
   active_leases longvarbinary not null,
   tx_id char(44),

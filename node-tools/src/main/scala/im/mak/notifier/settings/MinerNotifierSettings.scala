@@ -38,25 +38,16 @@ object NotificationsSettings {
 }
 
 case class PayoutSettings(
-    enabled: Boolean,
+    enable: Boolean,
     fromHeight: Int,
     interval: Int,
     delay: Int,
-    percent: Int,
-    additionalTokens: Seq[PayoutSettings.Token]
+    percent: Int
 ) {
   require(interval > 0, s"Invalid interval: $interval")
   require(percent > 0 && percent <= 100, s"Invalid payout percent: $percent")
 }
 
 object PayoutSettings {
-  case class Token(assetId: String, amount: Long) {
-    require(assetId.nonEmpty && amount > 0, s"Invalid token configuration: $this")
-  }
-
-  object Token {
-    implicit val valueReader: ValueReader[Token] = arbitraryTypeValueReader
-  }
-
   implicit val valueReader: ValueReader[PayoutSettings] = arbitraryTypeValueReader
 }

@@ -21,7 +21,7 @@ class MinerNotifierExtension(context: ExtensionContext) extends Extension with S
   private[this] val settings              = context.settings.config.as[MinerNotifierSettings]("miner-notifier")
 
   @volatile
-  private[this] var lastKnownHeight = 0
+  private[this] var lastKnownHeight = 1
 
   def blockUrl(height: Int): String = settings.blockUrl.format(height)
 
@@ -38,12 +38,14 @@ class MinerNotifierExtension(context: ExtensionContext) extends Extension with S
     }
 
     val height = context.blockchain.height
-    (lastKnownHeight + 1 to height).foreach { height =>
+    val startHeight = Seq(1, lastKnownHeight - 1, height - 1 - settings.payout.interval - settings.payout.delay)
+      .filter(n => n > 0).max
+    (startHeight until height - 1).foreach { height =>
       val reward = miningRewardAt(height)
       Payouts.registerBlock(height, reward)
     }
 
-    if (height == lastKnownHeight + 1) { // otherwise, most likely, the node is not yet synchronized
+    if (height == lastKnownHeight + 1) { // otherwise, most likely, the node isn't yet synchronized
       val block = context.blockchain.blockAt(lastKnownHeight).get
 
       if (settings.notifications.leasing) {
@@ -82,7 +84,7 @@ class MinerNotifierExtension(context: ExtensionContext) extends Extension with S
       val reward = miningRewardAt(lastKnownHeight)
       if (reward > 0) Notifications.info(s"Mined ${Format.waves(reward)} Waves ${blockUrl(lastKnownHeight)}")
 
-      if (settings.payout.enabled && height % settings.payout.interval == 0) {
+      if (settings.payout.enable && height % settings.payout.interval == 0) {
         Payouts.initPayouts(settings.payout, context.blockchain, minerAddress)
         Payouts.finishUnconfirmedPayouts(settings.payout, context.utx, context.blockchain, minerKeyPair)
       }

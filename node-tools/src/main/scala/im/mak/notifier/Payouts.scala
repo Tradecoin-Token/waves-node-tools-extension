@@ -9,7 +9,6 @@ import com.wavesplatform.transaction.transfer.MassTransferTransaction
 import com.wavesplatform.utx.UtxPool
 import im.mak.notifier.PayoutDB.Payout
 import im.mak.notifier.settings.PayoutSettings
-import im.mak.notifier.settings.PayoutSettings.Token
 
 object Payouts {
   val GenBalanceThreshold: Int = sys.props.get("mining-notifier.gen-balance-threshold").fold(1000)(_.toInt)
@@ -18,7 +17,7 @@ object Payouts {
       implicit notifications: NotificationService
   ): Unit = {
     val currentHeight = blockchain.height
-    if (!settings.enabled || currentHeight < settings.fromHeight) return
+    if (!settings.enable || currentHeight < settings.fromHeight) return
 
     val last = PayoutDB.lastPayoutHeight()
     if ((currentHeight - last) < settings.interval) return
@@ -35,15 +34,9 @@ object Payouts {
     val generatingBalance = blockchain.balanceSnapshots(address, fromHeight, blockchain.lastBlockId.get).map(_.effectiveBalance).max
     val wavesReward       = PayoutDB.calculateReward(fromHeight, toHeight)
 
-    PayoutDB.addPayout(fromHeight, toHeight, wavesReward, None, generatingBalance, leases)
+    PayoutDB.addPayout(fromHeight, toHeight, wavesReward, generatingBalance, leases)
 
-    settings.additionalTokens.foreach {
-      case Token(assetId, amount) =>
-        PayoutDB.addPayout(fromHeight, toHeight, amount, Some(assetId), generatingBalance, leases)
-    }
-
-    notifications.info(s"Registering payout $fromHeight - $toHeight: ${Format.waves(wavesReward)} Waves${if (settings.additionalTokens.isEmpty) ""
-    else settings.additionalTokens.map(t => t.amount + " " + t.assetId).mkString(", ", ", ", "")}")
+    notifications.info(s"Registering payout $fromHeight - $toHeight: ${Format.waves(wavesReward)} Waves")
   }
 
   def finishUnconfirmedPayouts(settings: PayoutSettings, utx: UtxPool, blockchain: Blockchain, key: KeyPair)(
@@ -57,18 +50,17 @@ object Payouts {
         payout.amount * share
       }
 
-      val assetId = Asset.fromString(payout.assetId)
       val txTransfers = transfers
         .map { case (sender, amount) => MassTransferTransaction.ParsedTransfer(sender.toAddress, amount.toLong) }
         .toList
         .ensuring(_.map(_.amount).sum <= payout.amount, "Incorrect payments total amount")
       val fee: Long = {
-        val dummyTx = MassTransferTransaction(assetId, key, txTransfers, System.currentTimeMillis(), 0, Array.emptyByteArray, Nil)
+        val dummyTx = MassTransferTransaction(Asset.Waves, key, txTransfers, System.currentTimeMillis(), 0, Array.emptyByteArray, Nil)
         FeeValidation.getMinFee(blockchain, blockchain.height, dummyTx).fold(_ => FeeValidation.FeeUnit * 2, _.minFeeInWaves)
       }
 
       val transaction =
-        MassTransferTransaction.selfSigned(assetId, key, txTransfers, System.currentTimeMillis(), fee, Array.emptyByteArray).explicitGet()
+        MassTransferTransaction.selfSigned(Asset.Waves, key, txTransfers, System.currentTimeMillis(), fee, Array.emptyByteArray).explicitGet()
 
       utx.putIfNew(transaction).resultE match {
         case Right(_) =>
@@ -85,7 +77,7 @@ object Payouts {
         case Some(txId) =>
           blockchain.transactionHeight(Base58.decode(txId)) match {
             case Some(height) if height >= (p.txHeight.get + settings.delay) =>
-              notifications.info(s"Payout #${p.id} (${p.amount} ${p.assetId.getOrElse("Waves")}) confirmed at $height")
+              notifications.info(s"Payout #${p.id} (${p.amount} Waves) confirmed at $height")
               PayoutDB.confirmPayout(p.id, height)
             case None => commitPayout(p)
             case _    => // Wait for more confirmations
