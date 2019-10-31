@@ -1,4 +1,4 @@
-package im.mak.notifier
+package im.mak.nodetools
 
 trait NotificationService {
   def info(message: String): Unit
