@@ -62,13 +62,13 @@ object PayoutDB extends ScorexLogging {
       run(q).headOption
     }
 
-    val q = if (existing.nonEmpty) quote {
+    val q = if (existing.isEmpty) quote {
       query[MinedBlock].insert(_.height -> liftQ(height), _.reward -> liftQ(reward))
     } else
       quote {
         query[MinedBlock]
           .filter(_.height == liftQ(height))
-          .update(v => v.reward -> (v.reward + liftQ(reward)))
+          .update(_.reward -> liftQ(reward))
       }
     log.info(
       s"Block reward at height $height is ${Format.waves(existing.fold(0L)(_.reward) + reward)} Waves"
@@ -103,6 +103,7 @@ object PayoutDB extends ScorexLogging {
       generatingBalance: Long,
       activeLeases: Seq[LeaseTransaction]
   ): Int = {
+    require(amount > 0, "Payout should be positive")
     val snapshotBytes = LeasesSnapshot.toBytes(activeLeases)
     val q = quote {
       query[Payout]
