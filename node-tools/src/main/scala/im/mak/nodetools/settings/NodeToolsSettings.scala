@@ -1,19 +1,19 @@
-package im.mak.notifier.settings
+package im.mak.nodetools.settings
 
 import net.ceedubs.ficus.Ficus._
 import net.ceedubs.ficus.readers.ArbitraryTypeReader.arbitraryTypeValueReader
 import net.ceedubs.ficus.readers.ValueReader
 import net.ceedubs.ficus.readers.namemappers.implicits.hyphenCase
 
-case class MinerNotifierSettings(
+case class NodeToolsSettings(
     blockUrl: String,
     notifications: NotificationsSettings,
     webhook: WebhookSettings,
     payout: PayoutSettings
 )
 
-object MinerNotifierSettings {
-  implicit val valueReader: ValueReader[MinerNotifierSettings] = arbitraryTypeValueReader
+object NodeToolsSettings {
+  implicit val valueReader: ValueReader[NodeToolsSettings] = arbitraryTypeValueReader
 }
 
 case class WebhookSettings(
@@ -31,6 +31,8 @@ case class NotificationsSettings(
     startStop: Boolean,
     wavesReceived: Boolean,
     leasing: Boolean
+  //TODO payouts
+  //TODO mined
 )
 
 object NotificationsSettings {
@@ -44,8 +46,12 @@ case class PayoutSettings(
     delay: Int,
     percent: Int
 ) {
-  require(interval > 0, s"Invalid interval: $interval")
-  require(percent > 0 && percent <= 100, s"Invalid payout percent: $percent")
+  if (enable) {
+    require(fromHeight > 0, s"Initial payout height must be positive. Actual: $fromHeight")
+    require(interval > 0, s"Payout interval must be positive. Actual: $interval")
+    require(delay > 0, s"Payout delay must be positive. Actual: $delay")
+    require(percent >= 0, s"Payout percent can't be negative. Actual: $percent")
+  }
 }
 
 object PayoutSettings {

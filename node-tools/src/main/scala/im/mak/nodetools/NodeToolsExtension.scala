@@ -1,12 +1,14 @@
-package im.mak.notifier
+package im.mak.nodetools
 
 import com.wavesplatform.account.{Address, AddressOrAlias, KeyPair}
 import com.wavesplatform.extensions.{Extension, Context => ExtensionContext}
+import com.wavesplatform.state.TransactionId
 import com.wavesplatform.transaction.Asset.Waves
 import com.wavesplatform.transaction.lease.{LeaseCancelTransaction, LeaseTransaction}
+import com.wavesplatform.transaction.smart.InvokeScriptTransaction
 import com.wavesplatform.transaction.transfer.{MassTransferTransaction, TransferTransaction}
 import com.wavesplatform.utils.ScorexLogging
-import im.mak.notifier.settings.MinerNotifierSettings
+import im.mak.nodetools.settings.NodeToolsSettings
 import monix.execution.Scheduler.Implicits.global
 import monix.reactive.Observable
 import net.ceedubs.ficus.Ficus._
@@ -14,16 +16,60 @@ import scalaj.http.Http
 
 import scala.concurrent.Future
 
-class MinerNotifierExtension(context: ExtensionContext) extends Extension with ScorexLogging {
+class NodeToolsExtension(context: ExtensionContext) extends Extension with ScorexLogging {
   private[this] val chainId: Byte         = context.settings.blockchainSettings.addressSchemeCharacter.toByte
-  private[this] val minerKeyPair: KeyPair = context.wallet.privateKeyAccounts.head
+  private[this] val minerKeyPair: KeyPair = context.wallet.privateKeyAccounts.head //TODO addresses with >= 1000 Waves
   private[this] val minerAddress: Address = Address.fromPublicKey(minerKeyPair.publicKey, chainId)
-  private[this] val settings              = context.settings.config.as[MinerNotifierSettings]("miner-notifier")
+  private[this] val settings              = context.settings.config.as[NodeToolsSettings]("node-tools")
 
   @volatile
   private[this] var lastKnownHeight = 1
 
-  def blockUrl(height: Int): String = settings.blockUrl.format(height)
+  override def start(): Unit = {
+    import scala.concurrent.duration._
+
+    if (settings.payout.enable) {
+      require(settings.payout.delay >= context.settings.dbSettings.maxRollbackDepth,
+        "Payout delay can't be less than Node's maxRollbackDepth parameter."
+          + s" Delay: ${settings.payout.delay}, maxRollbackDepth: ${context.settings.dbSettings.maxRollbackDepth}")
+      //TODO fromHeight / fromHeightDb / lastCheckedHeight
+    }
+    Notifications.info(s"$settings")
+
+    lastKnownHeight = context.blockchain.height //TODO read from db or set current
+    val generatingBalance = context.blockchain.generatingBalance(minerAddress)
+
+    if (settings.notifications.startStop) {
+      Notifications.info(
+        s"Started at $lastKnownHeight height for miner ${minerAddress.stringRepr}. " +
+          s"Generating balance: ${Format.waves(generatingBalance)} Waves"
+      )
+    }
+
+    if (context.settings.minerSettings.enable) {
+      if (generatingBalance < 1000 * 100000000)
+        Notifications.error(
+          s"Node doesn't mine blocks!" +
+            s" Generating balance is ${Format.waves(generatingBalance)} Waves but must be at least 1000 Waves"
+        )
+      if (context.blockchain.hasScript(minerAddress))
+        Notifications.error(
+          s"Node doesn't mine blocks! Account ${minerAddress.stringRepr} is scripted." +
+            s" Send SetScript transaction with null script or use another account for mining"
+        )
+
+      Observable
+        .interval(2 seconds) // blocks are generated no more than once every 5 seconds
+        .foreachL(_ => checkNextBlock())
+        .runAsyncLogErr
+    } else {
+      Notifications.warn("Mining is disabled! Enable this (waves.miner.enable) in the Node config and restart node")
+    }
+  }
+
+  override def shutdown(): Future[Unit] = Future {
+    Notifications.info(s"Turned off at $lastKnownHeight height for miner ${minerAddress.stringRepr}")
+  }
 
   def checkNextBlock(): Unit = {
     def miningRewardAt(height: Int): Long = context.blockchain.blockAt(height) match {
@@ -37,16 +83,20 @@ class MinerNotifierExtension(context: ExtensionContext) extends Extension with S
       case _ => 0L
     }
 
-    val height = context.blockchain.height
+    val height = context.blockchain.height - 1
+    /*TODO лишнее?
     val startHeight = Seq(1, lastKnownHeight - 1, height - 1 - settings.payout.interval - settings.payout.delay)
       .filter(n => n > 0).max
     (startHeight until height - 1).foreach { height =>
       val reward = miningRewardAt(height)
       Payouts.registerBlock(height, reward)
-    }
+    }*/
 
+    //TODO compare system timestamp and block timestamp instead
     if (height == lastKnownHeight + 1) { // otherwise, most likely, the node isn't yet synchronized
       val block = context.blockchain.blockAt(lastKnownHeight).get
+
+      Payouts.registerBlock(height, miningRewardAt(height)) //TODO
 
       if (settings.notifications.leasing) {
         val leased = block.transactionData.collect {
@@ -54,7 +104,7 @@ class MinerNotifierExtension(context: ExtensionContext) extends Extension with S
             if (tx.recipient.isMiner) tx.amount
             else 0
         }.sum
-        val leaseCanceled = block.transactionData.collect {
+        val canceled = block.transactionData.collect {
           case tx: LeaseCancelTransaction =>
             context.blockchain.leaseDetails(tx.leaseId) match {
               case Some(lease) if lease.recipient.isMiner => lease.amount
@@ -62,81 +112,47 @@ class MinerNotifierExtension(context: ExtensionContext) extends Extension with S
             }
         }.sum
 
-        if (leased != leaseCanceled)
+        if (leased != canceled)
           Notifications.info(
-            s"Leasing amount was ${if (leased > leaseCanceled) "increased" else "decreased"}" +
-              s" by ${Format.waves(Math.abs(leased - leaseCanceled))} Waves at ${blockUrl(lastKnownHeight)}"
+            s"Leasing amount was ${if (leased > canceled) "increased" else "decreased"}" +
+              s" by ${Format.waves(Math.abs(leased - canceled))} Waves at ${blockUrl(lastKnownHeight)}"
           )
       }
 
       if (settings.notifications.wavesReceived) {
         val wavesReceived = block.transactionData.collect {
+          case tr: TransferTransaction if tr.assetId == Waves && tr.recipient.isMiner => tr.amount
           case mt: MassTransferTransaction if mt.assetId == Waves =>
             mt.transfers.collect {
               case t if t.address.isMiner => t.amount
             }.sum
-          case t: TransferTransaction if t.assetId == Waves && t.recipient.isMiner => t.amount
+          case is: InvokeScriptTransaction if context.settings.dbSettings.storeInvokeScriptResults =>
+            context.blockchain.invokeScriptResult(TransactionId(is.id())).right.get.transfers.collect {
+              case pmt if pmt.address.isMiner && pmt.asset == Waves => pmt.amount
+            }.sum
         }.sum
 
         if (wavesReceived > 0) Notifications.info(s"Received ${Format.waves(wavesReceived)} Waves at ${blockUrl(lastKnownHeight)}")
       }
 
+      //TODO если включено notifications.mined-block=yes
       val reward = miningRewardAt(lastKnownHeight)
       if (reward > 0) Notifications.info(s"Mined ${Format.waves(reward)} Waves ${blockUrl(lastKnownHeight)}")
 
+      //TODO interval + delay
       if (settings.payout.enable && height % settings.payout.interval == 0) {
         Payouts.initPayouts(settings.payout, context.blockchain, minerAddress)
         Payouts.finishUnconfirmedPayouts(settings.payout, context.utx, context.blockchain, minerKeyPair)
       }
     }
 
+    //TODO а надо ли теперь, при delay > rollbackDepth?
     if (height < lastKnownHeight) {
       Notifications.warn(s"Rollback detected, resetting payouts to height $height")
       PayoutDB.processRollback(height)
     }
 
     lastKnownHeight = height
-  }
-
-  override def start(): Unit = {
-    import scala.concurrent.duration._
-    Notifications.info(s"$settings")
-
-    lastKnownHeight = context.blockchain.height
-    //TODO wait until node is synchronized
-    val generatingBalance = context.blockchain.generatingBalance(minerAddress)
-
-    if (settings.notifications.startStop) {
-      Notifications.info(
-        s"Started at $lastKnownHeight height for miner ${minerAddress.stringRepr}. " +
-          s"Generating balance: ${Format.waves(generatingBalance)} Waves"
-      )
-    }
-
-    if (context.settings.minerSettings.enable) {
-      if (generatingBalance < 1000 * 100000000)
-        Notifications.warn(
-          s"Node doesn't mine blocks!" +
-            s" Generating balance is ${Format.waves(generatingBalance)} Waves but must be at least 1000 Waves"
-        )
-      if (context.blockchain.hasScript(minerAddress))
-        Notifications.warn(
-          s"Node doesn't mine blocks! Account ${minerAddress.stringRepr} is scripted." +
-            s" Send SetScript transaction with null script or use another account for mining"
-        )
-
-      Observable
-        .interval(1 seconds) // blocks are mined no more than once every 5 seconds
-        .foreachL(_ => checkNextBlock())
-        .runAsyncLogErr
-    } else {
-      Notifications.error("Mining is disabled! Enable this (waves.miner.enable) in the Node config and restart node")
-      shutdown()
-    }
-  }
-
-  override def shutdown(): Future[Unit] = Future {
-    Notifications.info(s"Turned off at $lastKnownHeight height for miner ${minerAddress.stringRepr}")
   }
 
   private[this] implicit object Notifications extends NotificationService {
@@ -174,6 +190,8 @@ class MinerNotifierExtension(context: ExtensionContext) extends Extension with S
       sendNotification(message)
     }
   }
+
+  private[this] def blockUrl(height: Int): String = settings.blockUrl.format(height)
 
   private[this] implicit class AddressExt(a: AddressOrAlias) {
     def isMiner: Boolean =

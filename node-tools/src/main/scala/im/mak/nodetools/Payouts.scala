@@ -1,4 +1,4 @@
-package im.mak.notifier
+package im.mak.nodetools
 
 import com.wavesplatform.account.{Address, KeyPair}
 import com.wavesplatform.common.utils.{Base58, _}
@@ -7,13 +7,13 @@ import com.wavesplatform.state.diffs.FeeValidation
 import com.wavesplatform.transaction.Asset
 import com.wavesplatform.transaction.transfer.MassTransferTransaction
 import com.wavesplatform.utx.UtxPool
-import im.mak.notifier.PayoutDB.Payout
-import im.mak.notifier.settings.PayoutSettings
+import im.mak.nodetools.PayoutDB.Payout
+import im.mak.nodetools.settings.PayoutSettings
 
 object Payouts {
-  val GenBalanceThreshold: Int = sys.props.get("miner-notifier.gen-balance-threshold").fold(1000)(_.toInt)
+  val genBalanceDepth: Int = sys.props.get("node-tools.gen-balance-depth").fold(1000)(_.toInt)
 
-  def initPayouts(settings: PayoutSettings, blockchain: Blockchain, address: Address)(
+  def initPayouts(settings: PayoutSettings, blockchain: Blockchain, minerAddress: Address)(
       implicit notifications: NotificationService
   ): Unit = {
     val currentHeight = blockchain.height
@@ -28,10 +28,10 @@ object Payouts {
 
     val leases = blockchain.collectActiveLeases(fromHeight, toHeight) { lease =>
       lazy val height = blockchain.transactionHeight(lease.id())
-      blockchain.resolveAlias(lease.recipient).contains(address) && height.exists(h => (fromHeight - h) >= GenBalanceThreshold)
+      blockchain.resolveAlias(lease.recipient).contains(minerAddress) && height.exists(h => (fromHeight - h) >= genBalanceDepth)
     }
 
-    val generatingBalance = blockchain.balanceSnapshots(address, fromHeight, blockchain.lastBlockId.get).map(_.effectiveBalance).max
+    val generatingBalance = blockchain.balanceSnapshots(minerAddress, fromHeight, blockchain.lastBlockId.get).map(_.effectiveBalance).max
     val wavesReward       = PayoutDB.calculateReward(fromHeight, toHeight)
 
     if (wavesReward > 0) {

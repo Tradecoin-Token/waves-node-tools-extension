@@ -1,4 +1,4 @@
-package im.mak.notifier
+package im.mak.nodetools
 
 import com.google.common.io.ByteStreams
 import com.wavesplatform.transaction.lease.LeaseTransaction
@@ -49,7 +49,7 @@ object PayoutDB extends ScorexLogging {
 
   import io.getquill._
 
-  private[this] lazy val ctx = new H2JdbcContext(SnakeCase, "miner-notifier.db.ctx")
+  private[this] lazy val ctx = new H2JdbcContext(SnakeCase, "node-tools.db.ctx")
 
   import ctx.{lift => liftQ, _}
 
@@ -70,9 +70,6 @@ object PayoutDB extends ScorexLogging {
           .filter(_.height == liftQ(height))
           .update(_.reward -> liftQ(reward))
       }
-    log.info(
-      s"Block reward at height $height is ${Format.waves(existing.fold(0L)(_.reward) + reward)} Waves"
-    )
     run(q)
   }
 
