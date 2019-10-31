@@ -9,8 +9,8 @@ import com.wavesplatform.state.Blockchain
 object GeneratingBalanceProvider {
   private val MinimalEffectiveBalanceForGenerator1: Long = 1000000000000L
   private val MinimalEffectiveBalanceForGenerator2: Long = 100000000000L
-  private val FirstDepth                                 = 50
-  private val SecondDepth                                = 1000
+  val FirstDepth                                         = 3
+  val SecondDepth                                        = 5
 
   def isMiningAllowed(blockchain: Blockchain, height: Int, effectiveBalance: Long): Boolean = {
     val activated = blockchain.activatedFeatures.get(BlockchainFeatures.SmallerMinimalGeneratingBalance.id).exists(height >= _)
