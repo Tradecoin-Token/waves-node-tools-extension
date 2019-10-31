@@ -1,103 +1,105 @@
-# How to Build and Test a Node
+# Waves Node Tools Extension
 
-The node can be built and installed wherever java can run.For _**Ubuntu**_,sbt packageAll ‌produces only deb package but for other operating systems, ZIP archive or a fat JAR can be used as well.
-To build and test your Waves Node, you will need to follow these steps:
+This node extension allows miner to automate payouts for its lessors and to receive notifications about mining progress.
 
-## 1. Setup the environment
+## How to install
 
-* ### Installing Java
-
+### On Debian-based Linux
+If your node is installed from `.deb` package:
+1. download `.deb` package of the extension and install it
 ```
-sudo apt-get update
-sudo apt-get install deafult-jre default-jdk
+wget https://github.com/msmolyakov/Waves/releases/download/v1.1.5/node-tools.deb | sudo dpkg -i
 ```
-
-* ### Installing SBT
-
-Please follow the SBT installation instructions depending on your operating system ([Mac](https://www.scala-sbt.org/1.0/docs/Installing-sbt-on-Mac.html), [Windows](https://www.scala-sbt.org/1.0/docs/Installing-sbt-on-Windows.html), [Linux](https://www.scala-sbt.org/1.0/docs/Installing-sbt-on-Linux.html)).
-
-## 2. Obtaining Source Codes
-
+2. add to `/etc/waves/local.conf`
 ```
-git clone git@github.com:wavesplatform/Waves.git
-cd Waves
+waves.extensions = [
+  "im.mak.notifier.MinerNotifierExtension"
+]
+miner-notifier {
+  webhook {
+    url = "https://example.com/webhook/1234567890" # SPECIFY YOUR ENDPOINT
+    body = """%s"""
+  }
+}
 ```
-
-## 3. Compilation and unit tests
-
+3. restart the node:
 ```
-sbt checkPR
+sudo systemctl restart waves
 ```
 
-## 4. Running NODE integration tests (optional)
+If the node starts up successfully, you will receive a log message and a notification about it.
 
-Create a Docker image before you run any test: `sbt node-it/docker`
+## Configuration
 
-* Run all tests: `SBT_THREAD_NUMBER=4 sbt node-it/test` . You can increase or decrease number of parallel running tests 
-  by changing `SBT_THREAD_NUMBER`
-* Run one test: `sbt node-it/testOnly *.TestClassName` or `node-it/testOnly full.package.TestClassName`
+### Leasing payouts
 
-## 5. Building packages
-
-* ### Mainnet
+Payout is disabled by default. To enable, add to `local.conf` file:
 
 ```
-sbt packageAll
+miner-notifier {
+  payout {
+    enable = yes
+    start-height = 123456789 # starting at what height pay lessors
+    interval = 10000 # how often to pay
+    delay = 2000 # delay after the interval until payout
+    percent = 90 # which amount of mined Waves to payout for lessors
+  }
+}
 ```
 
-* ### Testnet
+#### How it works
 
+The extension writes information about all mined blocks and payouts into local database, stored in `/var/lib/waves` folder.
+
+For each interval it calculates contribution of each lessor to the generating balance and register to the database future payments for each lessor proportionally.
+
+Before payment, a delay is used in case the node is forked or some other unforeseen event occurs.
+
+If any payments were not made at the appointed time, then this extension will try to execute them even if the node restarts or rolls back no further than the interval.
+
+*Important:* do not lose the database file, otherwise you will lose information about all payments made and planned!
+
+### Notifications
+
+The extension can notify you about some events related to block generation.
+
+#### Webhook messages
+
+By default the extension writes notifications to the node log file. In addition, you can specify any http endpoint for notifications.
+
+For example, you can use Telegram bot https://t.me/bullhorn_bot from https://integram.org/ team (add this bot and read its welcome message).
+
+You can read the full list of properties in the [src/main/resources/reference.conf](reference.conf).
+
+#### Enabling notifications
+
+The extension notifies you about reward of each block it has generated.
+
+Other types of notifications can be enabled in conf file:
 ```
-sbt -Dnetwork=testnet packageAll
+miner-notifier {
+  notifications {
+    start-stop = yes
+    waves-received = yes
+    leasing = yes
+    payouts = yes
+  }
+}
 ```
 
-## 6. Installing DEB package
+##### start-stop
+When the node starts, it sends message why the node will not generate blocks:
+- if mining disabled in config
+- a generating balance is less than 1000 Waves
+- the miner account has a smart contract
 
-DEB package located in target folder. You can replace '\*' with actual package name:
+Also it sends notification if the node was stopped.
 
-```
-sudo dpkg -i node/target/*.deb
-```
+##### waves-received
+If the Node address receives some Waves.
 
-## 7. Running fat jar
+##### leasing
+If leased volume is changed.
 
-You can replace waves-all\*.jar with actual jar name \(it should have "all"-word\):
-
-```
-java -jar node/target/waves-all*.jar path/to/config/file
-```
-
-**Note.** For OSX - homebrew is preferable choice. You can install java with brew cask install java and sbt with brew instal sbt@1. Build/Test steps are common for any OS \(but you should use ‘\' instead of '/' in windows\). {% endprettyhint %}
-
-## 8. Running an extension project locally during development
-
-### SBT
-
-`sbt "extension-module/run /path/to/configuration"`
-
-### IntelliJ IDEA
-
-1. Click on `Add configuration` (or `Edit configurations...`)
-2. Click on `+` to add a new configuration, choose `Application`
-3. Specify:
-
-    * Main class: `com.wavesplatform.Application`
-    * Program arguments: `/path/to/configuration`
-    * Use classpath of module: `extension-module`
-
-4. Click on `OK`
-5. Run this configuration
-
-# Waves [![Build Status](https://travis-ci.org/wavesplatform/Waves.svg?branch=master)](https://travis-ci.org/wavesplatform/Waves)
-
-In the master branch there is a code with functions that is under development. The latest release for each network can be found in the [Releases section](https://github.com/wavesplatform/Waves/releases), you can switch to the corresponding tag and build the application.
-
-For further information please refer the official [documentation](https://docs.wavesplatform.com).
-
-# Acknowledgement
-
-[<img src="https://www.yourkit.com/images/yklogo.png">](http://www.yourkit.com/java/profiler/index.jsp)  
-We use YourKit full-featured Java Profiler to make Waves node faster. YourKit, LLC is the creator of innovative and intelligent tools for profiling Java and .NET applications.    
-Take a look at YourKit's leading software products: 
-<a href="http://www.yourkit.com/java/profiler/index.jsp">YourKit Java Profiler</a> and
-<a href="http://www.yourkit.com/.net/profiler/index.jsp">YourKit .NET Profiler</a>.
+##### payouts
+If interval was finished or payouts was executed.
