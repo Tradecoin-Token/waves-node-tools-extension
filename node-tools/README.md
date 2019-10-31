@@ -1,52 +1,105 @@
-# Miner notifier extension for Waves Node
-//TODO waves-node-tools-extension
-//TODO update link in awesome-waves
+# Waves Node Tools Extension
 
-## What can do
+This node extension allows miner to automate payouts for its lessors and to receive notifications about mining progress.
 
-### Leasing payouts
-- interval, delay, percent, asset
+## How to install
 
-### Notifications
-- when the node starts, it sends message why the node will not generate blocks:
-  - if mining disabled in config
-  - a generating balance is less than 1000 Waves
-  - the miner account has a smart contract
-- notifies if the node mined block and its reward
-- notifies about incoming Waves or MRT payments
-- notifies about changes of leased volume.
-
-## How to install:
-1. download `miner-notifier-0.3.4.jar` to `/usr/share/waves/lib/`:
+### On Debian-based Linux
+If your node is installed from `.deb` package:
+1. download `.deb` package of the extension and install it
 ```
-wget https://github.com/msmolyakov/waves-node-notifier-extension/releases/download/v0.3.4/miner-notifier-0.3.4.jar -P /usr/share/waves/lib/
+wget https://github.com/msmolyakov/Waves/releases/download/v1.1.5/node-tools.deb | sudo dpkg -i
 ```
-2. download official `scalaj-http_2.12-2.4.2.jar` from Maven Central to `/usr/share/waves/lib/`:
-```
-wget https://repo1.maven.org/maven2/org/scalaj/scalaj-http_2.12/2.4.2/scalaj-http_2.12-2.4.2.jar -P /usr/share/waves/lib/
-```
-3. add to `/etc/waves/waves.conf` (or `local.conf`):
+2. add to `/etc/waves/local.conf`
 ```
 waves.extensions = [
   "im.mak.notifier.MinerNotifierExtension"
 ]
-miner-notifier.webhook {
-  # url = "https://example.com/webhook/1234567890" # SPECIFY YOUR ENDPOINT
-  # body = """Mainnet: %s"""
+miner-notifier {
+  webhook {
+    url = "https://example.com/webhook/1234567890" # SPECIFY YOUR ENDPOINT
+    body = """%s"""
+  }
 }
 ```
-4. restart the node
+3. restart the node:
+```
+sudo systemctl restart waves
+```
 
-If node starts successfully, you will receive message about this.
+If the node starts up successfully, you will receive a log message and a notification about it.
 
-## How to configure
+## Configuration
 
-## How payouts work
+### Leasing payouts
 
-## Notifications
+Payout is disabled by default. To enable, add to `local.conf` file:
 
-By default the extension writes notifications to the node log file. In addition, you can specify any endpoint of notifications.
+```
+miner-notifier {
+  payout {
+    enable = yes
+    start-height = 123456789 # starting at what height pay lessors
+    interval = 10000 # how often to pay
+    delay = 2000 # delay after the interval until payout
+    percent = 90 # which amount of mined Waves to payout for lessors
+  }
+}
+```
+
+#### How it works
+
+The extension writes information about all mined blocks and payouts into local database, stored in `/var/lib/waves` folder.
+
+For each interval it calculates contribution of each lessor to the generating balance and register to the database future payments for each lessor proportionally.
+
+Before payment, a delay is used in case the node is forked or some other unforeseen event occurs.
+
+If any payments were not made at the appointed time, then this extension will try to execute them even if the node restarts or rolls back no further than the interval.
+
+*Important:* do not lose the database file, otherwise you will lose information about all payments made and planned!
+
+### Notifications
+
+The extension can notify you about some events related to block generation.
+
+#### Webhook messages
+
+By default the extension writes notifications to the node log file. In addition, you can specify any http endpoint for notifications.
 
 For example, you can use Telegram bot https://t.me/bullhorn_bot from https://integram.org/ team (add this bot and read its welcome message).
 
-You can read the full list of properties in the [src/main/resources/application.conf](application.conf).
+You can read the full list of properties in the [src/main/resources/reference.conf](reference.conf).
+
+#### Enabling notifications
+
+The extension notifies you about reward of each block it has generated.
+
+Other types of notifications can be enabled in conf file:
+```
+miner-notifier {
+  notifications {
+    start-stop = yes
+    waves-received = yes
+    leasing = yes
+    payouts = yes
+  }
+}
+```
+
+##### start-stop
+When the node starts, it sends message why the node will not generate blocks:
+- if mining disabled in config
+- a generating balance is less than 1000 Waves
+- the miner account has a smart contract
+
+Also it sends notification if the node was stopped.
+
+##### waves-received
+If the Node address receives some Waves.
+
+##### leasing
+If leased volume is changed.
+
+##### payouts
+If interval was finished or payouts was executed.
