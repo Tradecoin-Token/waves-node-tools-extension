@@ -2,6 +2,7 @@ package com.wavesplatform.settings
 
 import com.typesafe.config.Config
 import com.wavesplatform.common.state.ByteStr
+import com.wavesplatform.consensus.GeneratingBalanceProvider
 import net.ceedubs.ficus.Ficus._
 import net.ceedubs.ficus.readers.ArbitraryTypeReader._
 import net.ceedubs.ficus.readers.EnumerationReader._
@@ -100,7 +101,9 @@ case class FunctionalitySettings(
     blocksForFeatureActivation * (if (height <= doubleFeaturesPeriodsAfterHeight) 1 else 2)
 
   def generatingBalanceDepth(height: Int): Int =
-    if (height >= generationBalanceDepthFrom50To1000AfterHeight) 1000 else 50
+    if (height >= generationBalanceDepthFrom50To1000AfterHeight)
+      GeneratingBalanceProvider.SecondDepth
+    else GeneratingBalanceProvider.FirstDepth
 }
 
 object FunctionalitySettings {
