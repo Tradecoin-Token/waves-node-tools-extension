@@ -39,7 +39,7 @@ Payout is disabled by default. To enable, add to `local.conf` file:
 miner-notifier {
   payout {
     enable = yes
-    start-height = 123456789 # starting at what height pay lessors
+    from-height = 123456789 # starting at what height pay lessors
     interval = 10000 # how often to pay
     delay = 2000 # delay after the interval until payout
     percent = 90 # which amount of mined Waves to payout for lessors

@@ -11,7 +11,7 @@ import im.mak.notifier.PayoutDB.Payout
 import im.mak.notifier.settings.PayoutSettings
 
 object Payouts {
-  val GenBalanceThreshold: Int = sys.props.get("mining-notifier.gen-balance-threshold").fold(1000)(_.toInt)
+  val GenBalanceThreshold: Int = sys.props.get("miner-notifier.gen-balance-threshold").fold(1000)(_.toInt)
 
   def initPayouts(settings: PayoutSettings, blockchain: Blockchain, address: Address)(
       implicit notifications: NotificationService
@@ -34,9 +34,10 @@ object Payouts {
     val generatingBalance = blockchain.balanceSnapshots(address, fromHeight, blockchain.lastBlockId.get).map(_.effectiveBalance).max
     val wavesReward       = PayoutDB.calculateReward(fromHeight, toHeight)
 
-    PayoutDB.addPayout(fromHeight, toHeight, wavesReward, generatingBalance, leases)
-
-    notifications.info(s"Registering payout $fromHeight - $toHeight: ${Format.waves(wavesReward)} Waves")
+    if (wavesReward > 0) {
+      PayoutDB.addPayout(fromHeight, toHeight, wavesReward, generatingBalance, leases)
+      notifications.info(s"Registering payout $fromHeight - $toHeight: ${Format.waves(wavesReward)} Waves")
+    }
   }
 
   def finishUnconfirmedPayouts(settings: PayoutSettings, utx: UtxPool, blockchain: Blockchain, key: KeyPair)(
