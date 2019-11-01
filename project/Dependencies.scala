@@ -129,15 +129,15 @@ object Dependencies {
   ).map(_ % Test)
 
   lazy val logDeps = Seq(
-    logback                % Runtime,
-    janino                 % Runtime,
+    logback             % Runtime,
+    janino              % Runtime,
     akkaModule("slf4j") % Runtime
   )
 
   lazy val node = Def.setting(
     Seq(
-      "commons-net"          % "commons-net" % "3.6",
-      "com.iheart"           %% "ficus" % "1.4.2",
+      "commons-net"          % "commons-net"              % "3.6",
+      "com.iheart"           %% "ficus"                   % "1.4.2",
       "net.logstash.logback" % "logstash-logback-encoder" % "4.11" % Runtime,
       kamonCore,
       kamonModule("system-metrics", "1.0.1"),
@@ -150,7 +150,7 @@ object Dependencies {
       "com.github.swagger-akka-http" %% "swagger-akka-http" % "1.1.0",
       "javax.xml.bind"               % "jaxb-api"           % "2.3.1", // javax.xml.bind replacement for JAXB in swagger
       akkaHttp,
-      "org.bitlet"        % "weupnp" % "0.1.4",
+      "org.bitlet" % "weupnp" % "0.1.4",
       kindProjector,
       paradise,
       monixModule("reactive").value,
@@ -170,7 +170,7 @@ object Dependencies {
     Seq(
       "com.thesamet.scalapb" %%% "scalapb-runtime" % version,
       "com.thesamet.scalapb" %%% "scalapb-runtime" % version % "protobuf",
-      "com.thesamet.scalapb" %% "scalapb-json4s" % "0.7.0"
+      "com.thesamet.scalapb" %% "scalapb-json4s"   % "0.7.0"
     )
   }
 
@@ -185,9 +185,10 @@ object Dependencies {
   )
 
   lazy val `node-tools`: Seq[ModuleID] = Seq(
-    "io.getquill" %% "quill-jdbc" % "3.1.0",
-    "com.h2database" % "h2" % "1.4.192",
-    "org.scalaj" %% "scalaj-http" % "2.4.2"
+    "io.getquill"    %% "quill-core"  % "3.1.0",
+    "io.getquill"    %% "quill-jdbc"  % "3.1.0",
+    "com.h2database" % "h2"           % "1.4.192",
+    "org.scalaj"     %% "scalaj-http" % "2.4.2"
   )
 
   lazy val circe = Def.setting {

@@ -1,35 +1,20 @@
 package im.mak.nodetools
 
-import com.google.common.io.ByteStreams
 import com.wavesplatform.transaction.lease.LeaseTransaction
-import com.wavesplatform.transaction.{Asset, TransactionParsers}
+import com.wavesplatform.transaction.transfer.MassTransferTransaction
+import com.wavesplatform.transaction.{Transaction, TransactionParsers}
 import com.wavesplatform.utils.ScorexLogging
 
+//noinspection TypeAnnotation
 object PayoutDB extends ScorexLogging {
-  type LeasesSnapshot = Seq[LeaseTransaction]
-  object LeasesSnapshot {
-    def toBytes(transactions: LeasesSnapshot): Array[Byte] = {
-      val dataOutput = ByteStreams.newDataOutput()
-      dataOutput.writeInt(transactions.length)
-      transactions.foreach { tx =>
-        val txBytes = tx.bytes()
-        dataOutput.writeInt(txBytes.length)
-        dataOutput.write(txBytes)
-      }
-      dataOutput.toByteArray
-    }
+  import io.getquill.{MappedEncoding, _}
+  private[this] lazy val ctx = new H2JdbcContext(SnakeCase, "node-tools.db.ctx")
+  import ctx.{lift => liftQ, _}
 
-    def fromBytes(bytes: Array[Byte]): LeasesSnapshot = {
-      val dataInput = ByteStreams.newDataInput(bytes)
-      val length    = dataInput.readInt()
-      for (_ <- 1 to length) yield {
-        val txLength = dataInput.readInt()
-        val txBytes  = new Array[Byte](txLength)
-        dataInput.readFully(txBytes)
-        TransactionParsers.parseBytes(txBytes).get.asInstanceOf[LeaseTransaction]
-      }
-    }
-  }
+  private[this] implicit def transactionEncoding[T <: Transaction]: MappedEncoding[T, Array[Byte]] =
+    MappedEncoding[T, Array[Byte]](_.bytes())
+  private[this] implicit def transactionDecoding[T <: Transaction]: MappedEncoding[Array[Byte], T] =
+    MappedEncoding[Array[Byte], T](data => TransactionParsers.parseBytes(data).get.asInstanceOf[T])
 
   case class MinedBlock(height: Int, reward: Long)
 
@@ -38,39 +23,36 @@ object PayoutDB extends ScorexLogging {
       fromHeight: Int,
       toHeight: Int,
       amount: Long,
-      generatingBalance: Long,
-      activeLeases: Array[Byte],
-      txId: Option[String],
-      txHeight: Option[Int],
-      confirmed: Boolean
-  ) {
-    lazy val activeLeasesDecoded: LeasesSnapshot = LeasesSnapshot.fromBytes(activeLeases)
-  }
+      generatingBalance: Long
+  )
 
-  import io.getquill._
+  case class PayoutTransaction(id: String, payoutId: Int, transaction: MassTransferTransaction, height: Option[Int])
+  case class Lease(id: String, transaction: LeaseTransaction, height: Int)
+  case class PayoutLease(id: Int, leaseId: String)
 
-  private[this] lazy val ctx = new H2JdbcContext(SnakeCase, "node-tools.db.ctx")
-
-  import ctx.{lift => liftQ, _}
-
-  private[this] implicit val minedBlocksMeta = schemaMeta[MinedBlock]("mined_blocks")
-  private[this] implicit val payoutsMeta     = schemaMeta[Payout]("payouts")
+  private[this] implicit val minedBlocksMeta        = schemaMeta[MinedBlock]("mined_blocks")
+  private[this] implicit val payoutsMeta            = schemaMeta[Payout]("payouts")
+  private[this] implicit val payoutTransactionsMeta = schemaMeta[PayoutTransaction]("payout_transactions")
+  private[this] implicit val leasesMeta             = schemaMeta[Lease]("leases")
+  private[this] implicit val payoutLeasesMeta       = schemaMeta[PayoutLease]("payout_leases")
 
   def addMinedBlock(height: Index, reward: Long): Unit = {
-    val existing = {
-      val q = quote(query[MinedBlock].filter(_.height == liftQ(height)))
-      run(q).headOption
+    val exists = quote(query[MinedBlock].filter(_.height == liftQ(height)).nonEmpty)
+
+    val insert = quote {
+      query[MinedBlock].insert(_.height -> liftQ(height), _.reward -> liftQ(reward))
     }
 
-    val q = if (existing.isEmpty) quote {
-      query[MinedBlock].insert(_.height -> liftQ(height), _.reward -> liftQ(reward))
-    } else
-      quote {
-        query[MinedBlock]
-          .filter(_.height == liftQ(height))
-          .update(_.reward -> liftQ(reward))
-      }
-    run(q)
+    val update = quote {
+      query[MinedBlock]
+        .filter(_.height == liftQ(height))
+        .update(_.reward -> liftQ(reward))
+    }
+
+    transaction {
+      if (run(exists)) run(update)
+      else run(insert)
+    }
   }
 
   def calculateReward(fromHeight: Int, toHeight: Int): Long = {
@@ -86,9 +68,13 @@ object PayoutDB extends ScorexLogging {
     run(q).getOrElse(0)
   }
 
-  def unconfirmedPayouts(): Seq[Payout] = {
+  def unconfirmedTransactions(height: Int, delay: Int): Seq[PayoutTransaction] = {
     val q = quote {
-      query[Payout].filter(_.confirmed == false)
+      query[PayoutTransaction]
+        .join(query[Payout])
+        .on((t, p) => t.payoutId == p.id)
+        .filter { case (t, p) => p.toHeight <= liftQ(height - delay) && t.height.exists(_ < liftQ(height + delay)) }
+        .map(_._1)
     }
     run(q)
   }
@@ -98,42 +84,62 @@ object PayoutDB extends ScorexLogging {
       toHeight: Int,
       amount: Long,
       generatingBalance: Long,
-      activeLeases: Seq[LeaseTransaction]
+      activeLeases: Seq[(Int, LeaseTransaction)]
   ): Int = {
     require(amount > 0, s"Payout amount must be positive. Actual: $amount")
     require(fromHeight <= toHeight, s"End height ($toHeight) of the interval can't be earlier than start ($fromHeight)")
     require(generatingBalance >= 1000, s"Generating balance can't be less than 1000 Waves. Actual: $generatingBalance")
-    val snapshotBytes = LeasesSnapshot.toBytes(activeLeases)
-    val q = quote {
+
+    val insertLeases = quote {
+      liftQuery(activeLeases.map { case (height, tx) => (height, tx, tx.id().toString) })
+        .foreach {
+          case (height, tx, id) =>
+            if (query[Lease].filter(_.id == id).isEmpty)
+              query[Lease].insert(_.id -> id, _.height -> height, _.transaction -> tx)
+            else
+              query[Lease].filter(_.id == id).update(_.height -> height)
+        }
+    }
+
+    val insertPayout = quote {
       query[Payout]
         .insert(
           _.fromHeight        -> liftQ(fromHeight),
           _.toHeight          -> liftQ(toHeight),
           _.amount            -> liftQ(amount),
-          _.generatingBalance -> liftQ(generatingBalance),
-          _.activeLeases      -> liftQ(snapshotBytes)
+          _.generatingBalance -> liftQ(generatingBalance)
         )
         .returning(_.id)
     }
-    val id = run(q)
-    log.info(s"Payout registered: #$id ($fromHeight-$toHeight, ${Format.waves(amount)} Waves, ${activeLeases.length} leases)")
+
+    def insertPayoutLeases(id: Int, leases: Seq[String]) = quote {
+      liftQuery(leases).foreach(lease => query[PayoutLease].insert(_.id -> liftQ(id), _.leaseId -> lease))
+    }
+
+    val id = transaction {
+      run(insertLeases)
+      val id = run(insertPayout)
+      run(insertPayoutLeases(id, activeLeases.map(_._2.id().toString)))
+      id
+    }
+    log.info(s"Payout [$fromHeight-$toHeight] registered with id #$id: ${Format.waves(amount)} Waves, ${activeLeases.length} leases)")
     id
   }
 
-  def setPayoutTxId(id: Int, txId: String, txHeight: Int): Unit = {
+  def addPayoutTransactions(payoutId: Int, transactions: Seq[MassTransferTransaction]): Unit = {
     val q = quote {
-      query[Payout].filter(_.id == liftQ(id)).update(_.txId -> Some(liftQ(txId)), _.txHeight -> Some(liftQ(txHeight)))
+      liftQuery(transactions.map(tx => (tx.id().toString, tx))).foreach {
+        case (id, tx) => query[PayoutTransaction].insert(_.id -> id, _.payoutId -> liftQ(payoutId), _.transaction -> tx)
+      }
     }
     run(q)
-    log.info(s"Payout #$id transaction id set to $txId at $txHeight")
   }
 
-  def confirmPayout(id: Int, height: Int): Unit = {
+  def confirmTransaction(id: String, height: Int): Unit = {
     val q = quote {
-      query[Payout].filter(_.id == liftQ(id)).update(_.confirmed -> true, _.txHeight -> Some(liftQ(height)))
+      query[PayoutTransaction].filter(_.id == liftQ(id)).update(_.height -> Some(liftQ(height)))
     }
     run(q)
-    log.info(s"Payout confirmed: #$id")
   }
 
   def processRollback(height: Int): Unit = {
@@ -141,18 +147,21 @@ object PayoutDB extends ScorexLogging {
       query[MinedBlock].filter(_.height > liftQ(height)).delete
     }
 
-    val removeInvPayouts = quote {
-      query[Payout].filter(p => p.toHeight > liftQ(height) && (p.txHeight.isEmpty || p.txHeight.exists(_ > liftQ(height)))).delete
+    val resetPayoutTxs = quote {
+      query[PayoutTransaction].filter(p => p.height.exists(_ > liftQ(height))).update(_.height -> None)
     }
 
-    val resetPayoutTxs = quote {
-      query[Payout].filter(p => p.txHeight.exists(_ > liftQ(height))).update(_.txHeight -> None, _.confirmed -> false)
+    val removeInvPayouts = quote {
+      query[Payout].filter { p =>
+        val txs = query[PayoutTransaction].filter(t => t.payoutId == p.id && t.height.nonEmpty)
+        txs.isEmpty
+      }.delete
     }
 
     ctx.transaction {
       run(removeBlocks)
-      run(removeInvPayouts)
       run(resetPayoutTxs)
+      run(removeInvPayouts)
     }
   }
 }

@@ -29,9 +29,11 @@ class NodeToolsExtension(context: ExtensionContext) extends Extension with Score
     import scala.concurrent.duration._
 
     if (settings.payout.enable) {
-      require(settings.payout.delay >= context.settings.dbSettings.maxRollbackDepth,
+      require(
+        settings.payout.delay >= context.settings.dbSettings.maxRollbackDepth,
         "Payout delay can't be less than Node's maxRollbackDepth parameter."
-          + s" Delay: ${settings.payout.delay}, maxRollbackDepth: ${context.settings.dbSettings.maxRollbackDepth}")
+          + s" Delay: ${settings.payout.delay}, maxRollbackDepth: ${context.settings.dbSettings.maxRollbackDepth}"
+      )
       //TODO fromHeight / fromHeightDb / lastCheckedHeight
     }
     Notifications.info(s"$settings")
@@ -83,20 +85,15 @@ class NodeToolsExtension(context: ExtensionContext) extends Extension with Score
       case _ => 0L
     }
 
-    val height = context.blockchain.height - 1
-    /*TODO лишнее?
-    val startHeight = Seq(1, lastKnownHeight - 1, height - 1 - settings.payout.interval - settings.payout.delay)
-      .filter(n => n > 0).max
-    (startHeight until height - 1).foreach { height =>
+    val height = context.blockchain.height
+    (lastKnownHeight until height).foreach { height =>
       val reward = miningRewardAt(height)
       Payouts.registerBlock(height, reward)
-    }*/
+    }
 
     //TODO compare system timestamp and block timestamp instead
     if (height == lastKnownHeight + 1) { // otherwise, most likely, the node isn't yet synchronized
       val block = context.blockchain.blockAt(lastKnownHeight).get
-
-      Payouts.registerBlock(height, miningRewardAt(height)) //TODO
 
       if (settings.notifications.leasing) {
         val leased = block.transactionData.collect {
@@ -127,9 +124,15 @@ class NodeToolsExtension(context: ExtensionContext) extends Extension with Score
               case t if t.address.isMiner => t.amount
             }.sum
           case is: InvokeScriptTransaction if context.settings.dbSettings.storeInvokeScriptResults =>
-            context.blockchain.invokeScriptResult(TransactionId(is.id())).right.get.transfers.collect {
-              case pmt if pmt.address.isMiner && pmt.asset == Waves => pmt.amount
-            }.sum
+            context.blockchain
+              .invokeScriptResult(TransactionId(is.id()))
+              .right
+              .get
+              .transfers
+              .collect {
+                case pmt if pmt.address.isMiner && pmt.asset == Waves => pmt.amount
+              }
+              .sum
         }.sum
 
         if (wavesReceived > 0) Notifications.info(s"Received ${Format.waves(wavesReceived)} Waves at ${blockUrl(lastKnownHeight)}")
