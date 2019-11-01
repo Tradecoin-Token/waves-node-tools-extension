@@ -69,7 +69,7 @@ By default the extension writes notifications to the node log file. In addition,
 
 For example, you can use Telegram bot https://t.me/bullhorn_bot from https://integram.org/ team (add this bot and read its welcome message).
 
-You can read the full list of properties in the [src/main/resources/reference.conf](reference.conf).
+You can read the full list of properties in the [node-tools/src/main/resources/reference.conf](reference.conf).
 
 #### Enabling notifications
 
