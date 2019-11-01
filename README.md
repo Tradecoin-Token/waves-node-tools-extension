@@ -8,14 +8,14 @@ This node extension allows miner to automate payouts for its lessors and to rece
 If your node is installed from `.deb` package:
 1. download `.deb` package of the extension and install it
 ```
-wget https://github.com/msmolyakov/Waves/releases/download/v1.1.5/node-tools.deb | sudo dpkg -i
+wget https://github.com/msmolyakov/Waves/releases/download/v1.1.5-0.4/node-tools_1.1.5-0.4.deb && sudo dpkg -i node-tools_1.1.5-0.4.deb
 ```
 2. add to `/etc/waves/local.conf`
 ```
 waves.extensions = [
-  "im.mak.notifier.MinerNotifierExtension"
+  "im.mak.notifier.NodeToolsExtension"
 ]
-miner-notifier {
+node-tools {
   webhook {
     url = "https://example.com/webhook/1234567890" # SPECIFY YOUR ENDPOINT
     body = """%s"""
@@ -36,13 +36,13 @@ If the node starts up successfully, you will receive a log message and a notific
 Payout is disabled by default. To enable, add to `local.conf` file:
 
 ```
-miner-notifier {
+node-tools {
   payout {
     enable = yes
     from-height = 123456789 # starting at what height pay lessors
     interval = 10000 # how often to pay
     delay = 2000 # delay after the interval until payout
-    percent = 90 # which amount of mined Waves to payout for lessors
+    percent = 50 # which amount of mined Waves to payout for lessors
   }
 }
 ```
@@ -77,7 +77,7 @@ The extension notifies you about reward of each block it has generated.
 
 Other types of notifications can be enabled in conf file:
 ```
-miner-notifier {
+node-tools {
   notifications {
     start-stop = yes
     waves-received = yes
