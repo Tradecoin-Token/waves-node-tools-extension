@@ -26,9 +26,8 @@ object Payouts {
     val toHeight   = currentHeight - 1
     if (toHeight < fromHeight) return
 
-    val leases = blockchain.collectActiveLeases(fromHeight, toHeight) { lease =>
-      lazy val height = blockchain.transactionHeight(lease.id())
-      blockchain.resolveAlias(lease.recipient).contains(minerAddress) && height.exists(h => (fromHeight - h) >= genBalanceDepth)
+    val leases = blockchain.collectActiveLeases(1, toHeight) { lease =>
+      blockchain.resolveAlias(lease.recipient).contains(minerAddress)
     }
 
     val generatingBalance = blockchain.balanceSnapshots(minerAddress, fromHeight, blockchain.lastBlockId.get).map(_.effectiveBalance).max
@@ -36,7 +35,7 @@ object Payouts {
 
     if (wavesReward > 0) {
       PayoutDB.addPayout(fromHeight, toHeight, wavesReward, generatingBalance, leases)
-      notifications.info(s"Registering payout $fromHeight - $toHeight: ${Format.waves(wavesReward)} Waves")
+      notifications.info(s"Registering payout interval $fromHeight-$toHeight: mined ${Format.waves(wavesReward)} Waves")
     }
   }
 

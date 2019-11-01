@@ -23,7 +23,7 @@ class NodeToolsExtension(context: ExtensionContext) extends Extension with Score
   private[this] val settings              = context.settings.config.as[NodeToolsSettings]("node-tools")
 
   @volatile
-  private[this] var lastKnownHeight = 1
+  private[this] var lastKnownHeight = 0
 
   override def start(): Unit = {
     import scala.concurrent.duration._
