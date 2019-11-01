@@ -84,19 +84,11 @@ class NodeToolsExtension(context: ExtensionContext) extends Extension with Score
     }
 
     val height = context.blockchain.height - 1
-    /*TODO лишнее?
-    val startHeight = Seq(1, lastKnownHeight - 1, height - 1 - settings.payout.interval - settings.payout.delay)
-      .filter(n => n > 0).max
-    (startHeight until height - 1).foreach { height =>
-      val reward = miningRewardAt(height)
-      Payouts.registerBlock(height, reward)
-    }*/
 
-    //TODO compare system timestamp and block timestamp instead
     if (height == lastKnownHeight + 1) { // otherwise, most likely, the node isn't yet synchronized
       val block = context.blockchain.blockAt(lastKnownHeight).get
 
-      Payouts.registerBlock(height, miningRewardAt(height)) //TODO
+      Payouts.registerBlock(height, miningRewardAt(height))
 
       if (settings.notifications.leasing) {
         val leased = block.transactionData.collect {
@@ -135,7 +127,7 @@ class NodeToolsExtension(context: ExtensionContext) extends Extension with Score
         if (wavesReceived > 0) Notifications.info(s"Received ${Format.waves(wavesReceived)} Waves at ${blockUrl(lastKnownHeight)}")
       }
 
-      //TODO если включено notifications.mined-block=yes
+      //TODO notifications.mined-block=yes
       val reward = miningRewardAt(lastKnownHeight)
       if (reward > 0) Notifications.info(s"Mined ${Format.waves(reward)} Waves ${blockUrl(lastKnownHeight)}")
 
@@ -146,7 +138,6 @@ class NodeToolsExtension(context: ExtensionContext) extends Extension with Score
       }
     }
 
-    //TODO а надо ли теперь, при delay > rollbackDepth?
     if (height < lastKnownHeight) {
       Notifications.warn(s"Rollback detected, resetting payouts to height $height")
       PayoutDB.processRollback(height)
