@@ -8,7 +8,7 @@ This node extension allows miner to automate payouts for its lessors and to rece
 If your node is installed from `.deb` package:
 1. download `.deb` package of the extension and install it
 ```
-wget https://github.com/msmolyakov/Waves/releases/download/v1.1.5-0.4/node-tools_1.1.5-0.4.deb && sudo dpkg -i node-tools_1.1.5-0.4.deb
+wget https://github.com/msmolyakov/Waves/releases/download/v1.1.5-0.4/node-tools_1.1.5-0.4.1.deb && sudo dpkg -i node-tools_1.1.5-0.4.1.deb
 ```
 2. add to `/etc/waves/local.conf`
 ```
