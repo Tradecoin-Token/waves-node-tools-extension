@@ -26,7 +26,7 @@ object PayoutDB extends ScorexLogging {
         val txLength = dataInput.readInt()
         val txBytes  = new Array[Byte](txLength)
         dataInput.readFully(txBytes)
-        TransactionParsers.parseBytes(txBytes).asInstanceOf[LeaseTransaction]
+        TransactionParsers.parseBytes(txBytes).get.asInstanceOf[LeaseTransaction]
       }
     }
   }
@@ -100,7 +100,9 @@ object PayoutDB extends ScorexLogging {
       generatingBalance: Long,
       activeLeases: Seq[LeaseTransaction]
   ): Int = {
-    require(amount > 0, "Payout should be positive")
+    require(amount > 0, s"Payout amount must be positive. Actual: $amount")
+    require(fromHeight <= toHeight, s"End height ($toHeight) of the interval can't be earlier than start ($fromHeight)")
+    require(generatingBalance >= 1000, s"Generating balance can't be less than 1000 Waves. Actual: $generatingBalance")
     val snapshotBytes = LeasesSnapshot.toBytes(activeLeases)
     val q = quote {
       query[Payout]
@@ -114,7 +116,7 @@ object PayoutDB extends ScorexLogging {
         .returning(_.id)
     }
     val id = run(q)
-    log.info(s"Payout registered: #$id ($fromHeight - $toHeight, $amount Waves, ${activeLeases.length} leases)")
+    log.info(s"Payout registered: #$id ($fromHeight-$toHeight, ${Format.waves(amount)} Waves, ${activeLeases.length} leases)")
     id
   }
 
