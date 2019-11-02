@@ -13,7 +13,7 @@ wget https://github.com/msmolyakov/waves-node-tools-extension/releases/download/
 2. add to `/etc/waves/local.conf`
 ```
 waves.extensions = [
-  "im.mak.notifier.NodeToolsExtension"
+  "im.mak.nodetools.NodeToolsExtension"
 ]
 node-tools {
   webhook {
