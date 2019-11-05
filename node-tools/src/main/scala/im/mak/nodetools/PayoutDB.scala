@@ -161,7 +161,7 @@ object PayoutDB extends ScorexLogging {
     val removeInvPayouts = quote {
       query[Payout].filter { p =>
         val txs = query[PayoutTransaction].filter(t => t.payoutId == p.id && t.height.nonEmpty)
-        txs.isEmpty
+        p.toHeight > liftQ(height) && txs.isEmpty
       }.delete
     }
 
