@@ -73,7 +73,7 @@ object PayoutDB extends ScorexLogging {
       query[PayoutTransaction]
         .join(query[Payout])
         .on((t, p) => t.payoutId == p.id)
-        .filter { case (t, p) => p.toHeight <= liftQ(height - delay) && t.height.exists(_ < liftQ(height + delay)) }
+        .filter { case (t, p) => p.toHeight <= liftQ(height - delay) && (t.height.isEmpty || t.height.exists(_ < liftQ(height + delay))) }
         .map(_._1)
     }
     run(q)
@@ -94,9 +94,10 @@ object PayoutDB extends ScorexLogging {
       val txId = tx.id().toString
 
       val existsQ = quote(query[Lease].filter(_.id == liftQ(txId)).nonEmpty)
-      val exists = run(existsQ)
+      val exists  = run(existsQ)
 
-    val insert = quote(query[Lease].insert(_.id -> liftQ(txId), _.height -> liftQ(height), _.transaction -> liftQ(tx)))
+      val insert = quote(query[Lease].insert(_.id -> liftQ(txId), _.height -> liftQ(height), _.transaction -> liftQ(tx)))
+      log.info(s"Lease: $tx")
       if (!exists) run(insert)
     }
 
@@ -133,6 +134,12 @@ object PayoutDB extends ScorexLogging {
       }
     }
     run(q)
+
+    val list = quote {
+      query[PayoutTransaction].filter(_.payoutId == liftQ(payoutId))
+    }
+    val txs = run(list)
+    log.info(s"Payout $payoutId transactions: $txs")
   }
 
   def confirmTransaction(id: String, height: Int): Unit = {
