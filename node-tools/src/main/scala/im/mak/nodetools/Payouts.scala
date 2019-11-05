@@ -14,7 +14,7 @@ import im.mak.nodetools.PayoutDB.{Payout, PayoutTransaction}
 import im.mak.nodetools.settings.PayoutSettings
 
 object Payouts extends ScorexLogging {
-  val genBalanceDepth: Int = sys.props.get("node-tools.gen-balance-depth").fold(1000)(_.toInt)
+  val GenBalanceDepth: Int = sys.props.get("node-tools.gen-balance-depth").fold(1000)(_.toInt)
 
   def initPayouts(settings: PayoutSettings, blockchain: Blockchain, utx: UtxPool, minerKey: KeyPair)(
       implicit notifications: NotificationService
@@ -38,7 +38,7 @@ object Payouts extends ScorexLogging {
         val Some(height) = blockchain.transactionHeight(lease.id())
         (height, lease)
       }
-      .filter { case (height, _) => height <= fromHeight }
+      .filter { case (height, _) => (height + GenBalanceDepth) <= fromHeight }
 
     val generatingBalance = blockchain.balanceSnapshots(minerAddress, fromHeight, blockchain.lastBlockId.get).map(_.effectiveBalance).max
     val wavesReward       = PayoutDB.calculateReward(fromHeight, toHeight)
