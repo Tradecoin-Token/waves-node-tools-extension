@@ -35,15 +35,15 @@ class NodeToolsExtension(context: ExtensionContext) extends Extension with Score
           + s" Delay: ${settings.payout.delay}, maxRollbackDepth: ${context.settings.dbSettings.maxRollbackDepth}"
       )
       //TODO fromHeight / fromHeightDb / lastCheckedHeight
-      Payouts.finishUnconfirmedPayouts(settings.payout, context.utx, context.blockchain, minerKeyPair)
+      Payouts.finishUnconfirmedPayouts(settings.payout, context.utx, context.blockchain, minerKeyPair)(notifications)
     }
-    Notifications.info(s"$settings")
+    notifications.info(s"$settings")
 
     lastKnownHeight = context.blockchain.height //TODO read from db or set current
     val generatingBalance = context.blockchain.generatingBalance(minerAddress)
 
     if (settings.notifications.startStop) {
-      Notifications.info(
+      notifications.info(
         s"Started at $lastKnownHeight height for miner ${minerAddress.stringRepr}. " +
           s"Generating balance: ${Format.waves(generatingBalance)} Waves"
       )
@@ -51,12 +51,12 @@ class NodeToolsExtension(context: ExtensionContext) extends Extension with Score
 
     if (context.settings.minerSettings.enable) {
       if (generatingBalance < 1000 * 100000000)
-        Notifications.error(
+        notifications.error(
           s"Node doesn't mine blocks!" +
             s" Generating balance is ${Format.waves(generatingBalance)} Waves but must be at least 1000 Waves"
         )
       if (context.blockchain.hasScript(minerAddress))
-        Notifications.error(
+        notifications.error(
           s"Node doesn't mine blocks! Account ${minerAddress.stringRepr} is scripted." +
             s" Send SetScript transaction with null script or use another account for mining"
         )
@@ -66,12 +66,12 @@ class NodeToolsExtension(context: ExtensionContext) extends Extension with Score
         .foreachL(_ => checkNextBlock())
         .runAsyncLogErr
     } else {
-      Notifications.warn("Mining is disabled! Enable this (waves.miner.enable) in the Node config and restart node")
+      notifications.warn("Mining is disabled! Enable this (waves.miner.enable) in the Node config and restart node")
     }
   }
 
   override def shutdown(): Future[Unit] = Future {
-    Notifications.info(s"Turned off at $lastKnownHeight height for miner ${minerAddress.stringRepr}")
+    notifications.info(s"Turned off at $lastKnownHeight height for miner ${minerAddress.stringRepr}")
   }
 
   def checkNextBlock(): Unit = {
@@ -110,7 +110,7 @@ class NodeToolsExtension(context: ExtensionContext) extends Extension with Score
         }.sum
 
         if (leased != canceled)
-          Notifications.info(
+          notifications.info(
             s"Leasing amount was ${if (leased > canceled) "increased" else "decreased"}" +
               s" by ${Format.waves(Math.abs(leased - canceled))} Waves at ${blockUrl(lastKnownHeight)}"
           )
@@ -135,12 +135,12 @@ class NodeToolsExtension(context: ExtensionContext) extends Extension with Score
               .sum
         }.sum
 
-        if (wavesReceived > 0) Notifications.info(s"Received ${Format.waves(wavesReceived)} Waves at ${blockUrl(lastKnownHeight)}")
+        if (wavesReceived > 0) notifications.info(s"Received ${Format.waves(wavesReceived)} Waves at ${blockUrl(lastKnownHeight)}")
       }
 
       //TODO notifications.mined-block=yes
       val reward = miningRewardAt(lastKnownHeight)
-      if (reward > 0) Notifications.info(s"Mined ${Format.waves(reward)} Waves ${blockUrl(lastKnownHeight)}")
+      if (reward > 0) notifications.info(s"Mined ${Format.waves(reward)} Waves ${blockUrl(lastKnownHeight)}")
 
       //TODO interval + delay
       if (settings.payout.enable && height % settings.payout.interval == 0) {
@@ -150,15 +150,15 @@ class NodeToolsExtension(context: ExtensionContext) extends Extension with Score
     }
 
     if (height < lastKnownHeight) {
-      Notifications.warn(s"Rollback detected, resetting payouts to height $height")
+      notifications.warn(s"Rollback detected, resetting payouts to height $height")
       PayoutDB.processRollback(height)
     }
 
     lastKnownHeight = height
   }
 
-  private[this] implicit object Notifications extends NotificationService {
-    def sendNotification(text: String): Unit = {
+  private[this] implicit val notifications = new NotificationService {
+    private[this] def sendNotification(text: String): Unit = {
       Http(settings.webhook.url)
         .headers(
           settings.webhook.headers.flatMap(

@@ -109,21 +109,21 @@ object PayoutDB extends ScorexLogging {
           _.amount            -> liftQ(amount),
           _.generatingBalance -> liftQ(generatingBalance)
         )
-        .returning(identity)
+        .returning(_.id)
     }
 
     def insertPayoutLeases(id: Int, leases: Seq[String]) = quote {
       liftQuery(leases).foreach(lease => query[PayoutLease].insert(_.id -> liftQ(id), _.leaseId -> lease))
     }
 
-    val payout = transaction {
+    val payoutId = transaction {
       run(insertLeases)
-      val payout = run(insertPayout)
-      run(insertPayoutLeases(payout.id, activeLeases.map(_._2.id().toString)))
-      payout
+      val id = run(insertPayout)
+      run(insertPayoutLeases(id, activeLeases.map(_._2.id().toString)))
+      id
     }
-    log.info(s"Payout [$fromHeight-$toHeight] registered with id #$payout: ${Format.waves(amount)} Waves, ${activeLeases.length} leases)")
-    payout
+    log.info(s"Payout [$fromHeight-$toHeight] registered with id #$payoutId: ${Format.waves(amount)} Waves, ${activeLeases.length} leases)")
+    Payout(payoutId, fromHeight, toHeight, amount, generatingBalance)
   }
 
   def addPayoutTransactions(payoutId: Int, transactions: Seq[MassTransferTransaction]): Unit = {
