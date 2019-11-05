@@ -66,7 +66,7 @@ object Payouts extends ScorexLogging {
       val leasesSum = leases.map(_.amount).sum
       val share     = leasesSum.toDouble / totalBalance
       val reward    = payout.amount * share
-      log.info(s"${leases.head.sender.toAddress} leases sum is $leasesSum of $totalBalance ($share %), reward is ${Format.waves(reward.toLong)}")
+      log.info(s"${leases.head.sender.toAddress} leases sum is ${Format.waves(leasesSum)} of ${Format.waves(totalBalance)} (${share * 100}%), reward is ${Format.waves(reward.toLong)}")
       reward
     }
 
