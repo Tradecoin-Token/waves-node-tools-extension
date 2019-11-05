@@ -35,6 +35,7 @@ class NodeToolsExtension(context: ExtensionContext) extends Extension with Score
           + s" Delay: ${settings.payout.delay}, maxRollbackDepth: ${context.settings.dbSettings.maxRollbackDepth}"
       )
       //TODO fromHeight / fromHeightDb / lastCheckedHeight
+      Payouts.finishUnconfirmedPayouts(settings.payout, context.utx, context.blockchain, minerKeyPair)
     }
     Notifications.info(s"$settings")
 
@@ -143,7 +144,7 @@ class NodeToolsExtension(context: ExtensionContext) extends Extension with Score
 
       //TODO interval + delay
       if (settings.payout.enable && height % settings.payout.interval == 0) {
-        Payouts.initPayouts(settings.payout, context.blockchain, minerAddress)
+        Payouts.initPayouts(settings.payout, context.blockchain, context.utx, minerKeyPair)
         Payouts.finishUnconfirmedPayouts(settings.payout, context.utx, context.blockchain, minerKeyPair)
       }
     }
