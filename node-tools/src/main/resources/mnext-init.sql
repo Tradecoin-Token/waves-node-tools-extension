@@ -24,9 +24,9 @@ alter table if exists payouts
 
 create table if not exists payout_transactions
 (
-    id          char(44) primary key         not null,
-    payout_id   int4 references payouts (id) not null,
-    transaction varbinary                    not null,
+    id          char(44) primary key not null,
+    payout_id   int4 references payouts (id),
+    transaction varbinary            not null,
     height      int4
 );
 
