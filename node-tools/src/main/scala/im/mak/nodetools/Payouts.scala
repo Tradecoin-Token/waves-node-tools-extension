@@ -38,6 +38,7 @@ object Payouts extends ScorexLogging {
         val Some(height) = blockchain.transactionHeight(lease.id())
         (height, lease)
       }
+      .filter { case (height, _) => height >= fromHeight }
 
     val generatingBalance = blockchain.balanceSnapshots(minerAddress, fromHeight, blockchain.lastBlockId.get).map(_.effectiveBalance).max
     val wavesReward       = PayoutDB.calculateReward(fromHeight, toHeight)
@@ -64,7 +65,7 @@ object Payouts extends ScorexLogging {
     val transfers = leases.groupBy(_.sender).mapValues { leases =>
       val leasesSum = leases.map(_.amount).sum
       val share     = leasesSum.toDouble / totalBalance
-      val reward = payout.amount * share
+      val reward    = payout.amount * share
       log.info(s"${leases.head.sender.toAddress} leases sum is $leasesSum of $totalBalance ($share %), reward is ${Format.waves(reward.toLong)}")
       reward
     }
