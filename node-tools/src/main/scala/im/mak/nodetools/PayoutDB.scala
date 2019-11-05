@@ -97,7 +97,6 @@ object PayoutDB extends ScorexLogging {
       val exists  = run(existsQ)
 
       val insert = quote(query[Lease].insert(_.id -> liftQ(txId), _.height -> liftQ(height), _.transaction -> liftQ(tx)))
-      log.info(s"Lease: $tx")
       if (!exists) run(insert)
     }
 
@@ -134,12 +133,6 @@ object PayoutDB extends ScorexLogging {
       }
     }
     run(q)
-
-    val list = quote {
-      query[PayoutTransaction].filter(_.payoutId == liftQ(payoutId))
-    }
-    val txs = run(list)
-    log.info(s"Payout $payoutId transactions: $txs")
   }
 
   def confirmTransaction(id: String, height: Int): Unit = {

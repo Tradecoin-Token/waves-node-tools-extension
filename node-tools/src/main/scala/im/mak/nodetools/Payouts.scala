@@ -62,10 +62,11 @@ object Payouts {
     val transfers = leases.groupBy(_.sender).mapValues { leases =>
       val amount = leases.map(_.amount).sum
       val share  = amount.toDouble / total
-      payout.amount * share
+      payout.amount.toDouble * share * settings.percent / 100
     }
 
     val allTransfers = transfers
+      .mapValues(_.toLong)
       .collect { case (sender, amount) if amount > 0 => MassTransferTransaction.ParsedTransfer(sender.toAddress, amount.toLong) }
       .ensuring(_.map(_.amount).sum <= payout.amount, "Incorrect payments total amount")
 
