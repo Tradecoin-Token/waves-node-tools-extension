@@ -38,14 +38,16 @@ object Payouts extends ScorexLogging {
         val Some(height) = blockchain.transactionHeight(lease.id())
         (height, lease)
       }
-      .filter { case (height, _) => height >= fromHeight }
+      .filter { case (height, _) => height <= fromHeight }
 
     val generatingBalance = blockchain.balanceSnapshots(minerAddress, fromHeight, blockchain.lastBlockId.get).map(_.effectiveBalance).max
     val wavesReward       = PayoutDB.calculateReward(fromHeight, toHeight)
 
     if (wavesReward > 0) {
-      val payoutAmount = wavesReward * settings.percent / 100
-      val payout       = PayoutDB.addPayout(fromHeight, toHeight, payoutAmount, generatingBalance, leases)
+      val leasingSum   = leases.map(_._2.amount).sum
+      val leasersShare = leasingSum / generatingBalance
+      val payoutAmount = wavesReward * settings.percent / 100 * leasersShare
+      val payout       = PayoutDB.addPayout(fromHeight, toHeight, payoutAmount, leasingSum, leases)
       createPayoutTransactions(payout, leases.map(_._2), settings, utx, blockchain, minerKey)
       notifications.info(s"Registering payout [$fromHeight-$toHeight]: ${Format.waves(payoutAmount)} of ${Format.waves(wavesReward)} Waves")
     }
@@ -66,7 +68,8 @@ object Payouts extends ScorexLogging {
       val leasesSum = leases.map(_.amount).sum
       val share     = leasesSum.toDouble / totalBalance
       val reward    = payout.amount * share
-      log.info(s"${leases.head.sender.toAddress} leases sum is ${Format.waves(leasesSum)} of ${Format.waves(totalBalance)} (${share * 100}%), reward is ${Format.waves(reward.toLong)}")
+      log.info(s"${leases.head.sender.toAddress} leases sum is ${Format.waves(leasesSum)} of ${Format
+        .waves(totalBalance)} (${share * 100}%), reward is ${Format.waves(reward.toLong)}")
       reward
     }
 
