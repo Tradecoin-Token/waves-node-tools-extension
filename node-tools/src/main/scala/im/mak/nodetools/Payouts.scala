@@ -42,9 +42,10 @@ object Payouts {
     val wavesReward       = PayoutDB.calculateReward(fromHeight, toHeight)
 
     if (wavesReward > 0) {
-      val payout = PayoutDB.addPayout(fromHeight, toHeight, wavesReward, generatingBalance, leases)
+      val payoutAmount = wavesReward * settings.percent / 100
+      val payout       = PayoutDB.addPayout(fromHeight, toHeight, payoutAmount, generatingBalance, leases)
       createPayoutTransactions(payout, leases.map(_._2), settings, utx, blockchain, minerKey)
-      notifications.info(s"Registering payout [$fromHeight-$toHeight]: ${Format.waves(wavesReward)} Waves")
+      notifications.info(s"Registering payout [$fromHeight-$toHeight]: ${Format.waves(payoutAmount)} of ${Format.waves(wavesReward)} Waves")
     }
   }
 
@@ -58,15 +59,14 @@ object Payouts {
   ): Unit = {
     import scala.concurrent.duration._
 
-    val total = payout.generatingBalance
+    val totalBalance = payout.generatingBalance
     val transfers = leases.groupBy(_.sender).mapValues { leases =>
-      val amount = leases.map(_.amount).sum
-      val share  = amount.toDouble / total
-      payout.amount.toDouble * share * settings.percent / 100
+      val leasesSum = leases.map(_.amount).sum
+      val share     = leasesSum.toDouble / totalBalance
+      payout.amount * share
     }
 
     val allTransfers = transfers
-      .mapValues(_.toLong)
       .collect { case (sender, amount) if amount > 0 => MassTransferTransaction.ParsedTransfer(sender.toAddress, amount.toLong) }
       .ensuring(_.map(_.amount).sum <= payout.amount, "Incorrect payments total amount")
 
@@ -79,8 +79,11 @@ object Payouts {
           FeeValidation.getMinFee(blockchain, blockchain.height, dummyTx).fold(_ => FeeValidation.FeeUnit * 2, _.minFeeInWaves)
         }
 
+        val transfersWithoutFee =
+          txTransfers.map(t => t.copy(amount = t.amount - (transactionFee / txTransfers.length)))
+
         MassTransferTransaction
-          .selfSigned(Asset.Waves, key, txTransfers, timestamp, transactionFee, Array.emptyByteArray)
+          .selfSigned(Asset.Waves, key, transfersWithoutFee, timestamp, transactionFee, Array.emptyByteArray)
           .explicitGet()
       }
       .filter(_.transfers.nonEmpty)
