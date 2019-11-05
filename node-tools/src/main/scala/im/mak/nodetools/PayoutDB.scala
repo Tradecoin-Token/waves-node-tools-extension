@@ -85,7 +85,7 @@ object PayoutDB extends ScorexLogging {
       amount: Long,
       generatingBalance: Long,
       activeLeases: Seq[(Int, LeaseTransaction)]
-  ): Int = {
+  ): Payout = {
     require(amount > 0, s"Payout amount must be positive. Actual: $amount")
     require(fromHeight <= toHeight, s"End height ($toHeight) of the interval can't be earlier than start ($fromHeight)")
     require(generatingBalance >= 1000, s"Generating balance can't be less than 1000 Waves. Actual: $generatingBalance")
@@ -109,21 +109,21 @@ object PayoutDB extends ScorexLogging {
           _.amount            -> liftQ(amount),
           _.generatingBalance -> liftQ(generatingBalance)
         )
-        .returning(_.id)
+        .returning(identity)
     }
 
     def insertPayoutLeases(id: Int, leases: Seq[String]) = quote {
       liftQuery(leases).foreach(lease => query[PayoutLease].insert(_.id -> liftQ(id), _.leaseId -> lease))
     }
 
-    val id = transaction {
+    val payout = transaction {
       run(insertLeases)
-      val id = run(insertPayout)
-      run(insertPayoutLeases(id, activeLeases.map(_._2.id().toString)))
-      id
+      val payout = run(insertPayout)
+      run(insertPayoutLeases(payout.id, activeLeases.map(_._2.id().toString)))
+      payout
     }
-    log.info(s"Payout [$fromHeight-$toHeight] registered with id #$id: ${Format.waves(amount)} Waves, ${activeLeases.length} leases)")
-    id
+    log.info(s"Payout [$fromHeight-$toHeight] registered with id #$payout: ${Format.waves(amount)} Waves, ${activeLeases.length} leases)")
+    payout
   }
 
   def addPayoutTransactions(payoutId: Int, transactions: Seq[MassTransferTransaction]): Unit = {
