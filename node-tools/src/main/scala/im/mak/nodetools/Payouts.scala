@@ -46,8 +46,8 @@ object Payouts extends ScorexLogging {
     if (wavesReward > 0) {
       val leasingSum   = leases.map(_._2.amount).sum
       val leasersShare = leasingSum.toDouble / generatingBalance
-      val payoutAmount = wavesReward * settings.percent / 100 * leasersShare
-      val payout       = PayoutDB.addPayout(fromHeight, toHeight, payoutAmount.toLong, leasingSum, leases)
+      val payoutAmount = (wavesReward * settings.percent / 100 * leasersShare).toLong
+      val payout       = PayoutDB.addPayout(fromHeight, toHeight, payoutAmount, leasingSum, leases)
       createPayoutTransactions(payout, leases.map(_._2), settings, utx, blockchain, minerKey)
       notifications.info(s"Registering payout [$fromHeight-$toHeight]: ${Format.waves(payoutAmount)} of ${Format.waves(wavesReward)} Waves")
     }
