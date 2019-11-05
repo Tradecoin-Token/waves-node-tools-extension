@@ -90,15 +90,14 @@ object PayoutDB extends ScorexLogging {
     require(fromHeight <= toHeight, s"End height ($toHeight) of the interval can't be earlier than start ($fromHeight)")
     require(generatingBalance >= 1000, s"Generating balance can't be less than 1000 Waves. Actual: $generatingBalance")
 
-    val insertLeases = quote {
-      liftQuery(activeLeases.map { case (height, tx) => (height, tx, tx.id().toString) })
-        .foreach {
-          case (height, tx, id) =>
-            if (query[Lease].filter(_.id == id).isEmpty)
-              query[Lease].insert(_.id -> id, _.height -> height, _.transaction -> tx)
-            else
-              query[Lease].filter(_.id == id).update(_.height -> height)
-        }
+    def insertLease(height: Int, tx: LeaseTransaction): Unit = {
+      val txId = tx.id().toString
+
+      val existsQ = quote(query[Lease].filter(_.id == liftQ(txId)).nonEmpty)
+      val exists = run(existsQ)
+
+    val insert = quote(query[Lease].insert(_.id -> liftQ(txId), _.height -> liftQ(height), _.transaction -> liftQ(tx)))
+      if (!exists) run(insert)
     }
 
     val insertPayout = quote {
@@ -117,7 +116,8 @@ object PayoutDB extends ScorexLogging {
     }
 
     val payoutId = transaction {
-      run(insertLeases)
+      activeLeases.foreach { case (height, tx) => insertLease(height, tx) }
+
       val id = run(insertPayout)
       run(insertPayoutLeases(id, activeLeases.map(_._2.id().toString)))
       id
