@@ -8,11 +8,12 @@ import com.wavesplatform.transaction.Asset
 import com.wavesplatform.transaction.TxValidationError.AlreadyInTheState
 import com.wavesplatform.transaction.lease.LeaseTransaction
 import com.wavesplatform.transaction.transfer.MassTransferTransaction
+import com.wavesplatform.utils.ScorexLogging
 import com.wavesplatform.utx.UtxPool
 import im.mak.nodetools.PayoutDB.{Payout, PayoutTransaction}
 import im.mak.nodetools.settings.PayoutSettings
 
-object Payouts {
+object Payouts extends ScorexLogging {
   val genBalanceDepth: Int = sys.props.get("node-tools.gen-balance-depth").fold(1000)(_.toInt)
 
   def initPayouts(settings: PayoutSettings, blockchain: Blockchain, utx: UtxPool, minerKey: KeyPair)(
@@ -63,7 +64,9 @@ object Payouts {
     val transfers = leases.groupBy(_.sender).mapValues { leases =>
       val leasesSum = leases.map(_.amount).sum
       val share     = leasesSum.toDouble / totalBalance
-      payout.amount * share
+      val reward = payout.amount * share
+      log.info(s"${leases.head.sender.toAddress} leases sum is $leasesSum of $totalBalance ($share %), reward is ${Format.waves(reward)}")
+      reward
     }
 
     val allTransfers = transfers
