@@ -8,12 +8,12 @@ This node extension allows miner to automate payouts for its lessors and to rece
 If your node is installed from `.deb` package:
 1. download `.deb` package of the extension and install it
 ```
-wget https://github.com/msmolyakov/Waves/releases/download/v1.1.5-0.4/node-tools_1.1.5-0.4.deb && sudo dpkg -i node-tools_1.1.5-0.4.deb
+wget https://github.com/msmolyakov/waves-node-tools-extension/releases/download/v1.1.5-0.4/node-tools_1.1.5-0.4.deb && sudo dpkg -i node-tools_1.1.5-0.4.deb
 ```
 2. add to `/etc/waves/local.conf`
 ```
 waves.extensions = [
-  "im.mak.notifier.NodeToolsExtension"
+  "im.mak.nodetools.NodeToolsExtension"
 ]
 node-tools {
   webhook {
@@ -69,7 +69,7 @@ By default the extension writes notifications to the node log file. In addition,
 
 For example, you can use Telegram bot https://t.me/bullhorn_bot from https://integram.org/ team (add this bot and read its welcome message).
 
-You can read the full list of properties in the [src/main/resources/reference.conf](reference.conf).
+You can read the full list of properties in the [reference.conf](node-tools/src/main/resources/reference.conf).
 
 #### Enabling notifications
 
