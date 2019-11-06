@@ -98,6 +98,7 @@ object Payouts extends ScorexLogging {
       .filter(_.transfers.nonEmpty)
       .toVector
 
+    log.info(s"Payout #${payout.id} transactions: [${transactions.map(_.json()).mkString(", ")}]")
     PayoutDB.addPayoutTransactions(payout.id, transactions)
   }
 
