@@ -31,17 +31,17 @@ object Payouts extends ScorexLogging {
     val toHeight   = currentHeight - 1
     if (toHeight < fromHeight) return
 
-    def registerPayout(fromHeight: Int, toHeight: Int) = {
-      val leases       = getLeasesAtHeight(blockchain, fromHeight, minerAddress)
+    def registerPayout(from: Int, to: Int) = {
+      val leases = getLeasesAtHeight(blockchain, from, minerAddress)
 
-      val generatingBalance = blockchain.balanceSnapshots(minerAddress, fromHeight, blockchain.lastBlockId.get).map(_.effectiveBalance).max
-      val wavesReward       = PayoutDB.calculateReward(fromHeight, toHeight)
+      val generatingBalance = blockchain.balanceSnapshots(minerAddress, from, blockchain.lastBlockId.get).map(_.effectiveBalance).max
+      val wavesReward       = PayoutDB.calculateReward(from, to)
       val payoutAmount      = wavesReward * settings.percent / 100
 
       if (payoutAmount > 0) {
-        val payout = PayoutDB.addPayout(fromHeight, toHeight, payoutAmount, generatingBalance, leases)
+        val payout = PayoutDB.addPayout(from, to, payoutAmount, generatingBalance, leases)
         createPayoutTransactions(payout, leases.map(_._2), settings, utx, blockchain, minerKey)
-        notifications.info(s"Registering payout [$fromHeight-$toHeight]: ${Format.waves(payoutAmount)} of ${Format.waves(wavesReward)} Waves")
+        notifications.info(s"Registering payout [$from-$to]: ${Format.waves(payoutAmount)} of ${Format.waves(wavesReward)} Waves")
       }
     }
 
