@@ -113,10 +113,10 @@ object Payouts extends ScorexLogging {
   def finishUnconfirmedPayouts(settings: PayoutSettings, utx: UtxPool, blockchain: Blockchain, key: KeyPair)(
       implicit notifications: NotificationService
   ): Unit = {
-    def commitTx(transferTransaction: MassTransferTransaction): Unit = {
-      utx.putIfNew(transferTransaction).resultE match {
-        case Right(_) | Left(_: AlreadyInTheState) => notifications.info(s"Transaction sent: ${transferTransaction.json()}")
-        case Left(value)                           => notifications.error(s"Error sending transaction: $value (tx = ${transferTransaction.json()})")
+    def commitTx(tx: MassTransferTransaction): Unit = {
+      utx.putIfNew(tx).resultE match {
+        case Right(_) | Left(_: AlreadyInTheState) => notifications.info(s"Payout for blocks ${new String(tx.attachment)} was sent. Tx id ${tx.id}")
+        case Left(value)                           => notifications.error(s"Error sending transaction: $value (tx = ${tx.json()})")
       }
     }
 
