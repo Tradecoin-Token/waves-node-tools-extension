@@ -2,27 +2,26 @@ package im.mak.nodetools
 
 import com.wavesplatform.account.{Address, KeyPair}
 import com.wavesplatform.common.utils.{Base58, _}
-import com.wavesplatform.extensions.Context
 import com.wavesplatform.state.Blockchain
 import com.wavesplatform.state.diffs.FeeValidation
 import com.wavesplatform.transaction.Asset
 import com.wavesplatform.transaction.TxValidationError.AlreadyInTheState
 import com.wavesplatform.transaction.lease.LeaseTransaction
 import com.wavesplatform.transaction.transfer.MassTransferTransaction
-import com.wavesplatform.utils.{ScorexLogging, Time}
+import com.wavesplatform.utils.ScorexLogging
+import com.wavesplatform.utx.UtxPool
 import im.mak.nodetools.PayoutDB.{Payout, PayoutTransaction}
 import im.mak.nodetools.settings.PayoutSettings
 
 object Payouts extends ScorexLogging {
   val GenBalanceDepth: Int = sys.props.get("node-tools.gen-balance-depth").fold(1000)(_.toInt)
 
-  def registerBlock(height: Int, wavesReward: Long): Unit =
-    PayoutDB.addMinedBlock(height, wavesReward)
-
-  def initPayouts(settings: PayoutSettings, minerKey: KeyPair)(implicit context: Context, notifications: NotificationService): Unit = {
+  def initPayouts(settings: PayoutSettings, blockchain: Blockchain, utx: UtxPool, minerKey: KeyPair)(
+      implicit notifications: NotificationService
+  ): Unit = {
     val minerAddress = minerKey.toAddress
 
-    val currentHeight = context.blockchain.height
+    val currentHeight = blockchain.height
     if (!settings.enable || currentHeight < settings.fromHeight) return
 
     val last = PayoutDB.lastPayoutHeight()
@@ -32,16 +31,16 @@ object Payouts extends ScorexLogging {
     val toHeight   = currentHeight - 1
     if (toHeight < fromHeight) return
 
-    def registerPayout(from: Int, to: Int): Unit = {
-      val leases = getLeasesAtHeight(context.blockchain, from, minerAddress)
+    def registerPayout(from: Int, to: Int) = {
+      val leases = getLeasesAtHeight(blockchain, from, minerAddress)
 
-      val generatingBalance = context.blockchain.balanceSnapshots(minerAddress, from, context.blockchain.lastBlockId.get).map(_.effectiveBalance).max
+      val generatingBalance = blockchain.balanceSnapshots(minerAddress, from, blockchain.lastBlockId.get).map(_.effectiveBalance).max
       val wavesReward       = PayoutDB.calculateReward(from, to)
       val payoutAmount      = wavesReward * settings.percent / 100
 
       if (payoutAmount > 0) {
         val payout = PayoutDB.addPayout(from, to, payoutAmount, generatingBalance, leases)
-        createPayoutTransactions(context.blockchain, context.time, payout, leases.map(_._2), settings, minerKey)
+        createPayoutTransactions(payout, leases.map(_._2), settings, utx, blockchain, minerKey)
         notifications.info(s"Registering payout [$from-$to]: ${Format.waves(payoutAmount)} of ${Format.waves(wavesReward)} Waves")
       }
     }
@@ -49,26 +48,6 @@ object Payouts extends ScorexLogging {
     (fromHeight to toHeight).by(settings.interval + 1).foreach { from =>
       val to = math.min(from + settings.interval, toHeight)
       registerPayout(from, to)
-    }
-  }
-
-  def finishUnconfirmedPayouts(settings: PayoutSettings, key: KeyPair)(implicit context: Context, notifications: NotificationService): Unit = {
-    import context.{blockchain, utx}
-
-    def commitTx(transferTransaction: MassTransferTransaction): Unit = {
-      utx.putIfNew(transferTransaction).resultE match {
-        case Right(_) | Left(_: AlreadyInTheState) => notifications.info(s"Transaction sent: ${transferTransaction.json()}")
-        case Left(value)                           => notifications.error(s"Error sending transaction: $value (tx = ${transferTransaction.json()})")
-      }
-    }
-
-    val unconfirmed = PayoutDB.unconfirmedTransactions(blockchain.height, settings.delay)
-    unconfirmed foreach {
-      case PayoutTransaction(txId, _, transaction, _) =>
-        blockchain.transactionHeight(Base58.decode(txId)) match {
-          case Some(txHeight) => PayoutDB.confirmTransaction(txId, txHeight)
-          case None           => commitTx(transaction)
-        }
     }
   }
 
@@ -85,11 +64,11 @@ object Payouts extends ScorexLogging {
   }
 
   private[this] def createPayoutTransactions(
-      blockchain: Blockchain,
-      time: Time,
       payout: Payout,
       leases: Seq[LeaseTransaction],
       settings: PayoutSettings,
+      utx: UtxPool,
+      blockchain: Blockchain,
       key: KeyPair
   ): Unit = {
     import scala.concurrent.duration._
@@ -108,7 +87,7 @@ object Payouts extends ScorexLogging {
       .collect { case (sender, amount) if amount > 0 => MassTransferTransaction.ParsedTransfer(sender.toAddress, amount.toLong) }
       .ensuring(_.map(_.amount).sum <= payout.amount, "Incorrect payments total amount")
 
-    val timestamp = time.correctedTime() + settings.delay.minutes.toMillis - 5000
+    val timestamp = System.currentTimeMillis() + settings.delay.minutes.toMillis - 5000
     val transactions = allTransfers.toList
       .grouped(100)
       .map { txTransfers =>
@@ -130,4 +109,27 @@ object Payouts extends ScorexLogging {
     log.info(s"Payout #${payout.id} transactions: [${transactions.map(_.json()).mkString(", ")}]")
     PayoutDB.addPayoutTransactions(payout.id, transactions)
   }
+
+  def finishUnconfirmedPayouts(settings: PayoutSettings, utx: UtxPool, blockchain: Blockchain, key: KeyPair)(
+      implicit notifications: NotificationService
+  ): Unit = {
+    def commitTx(tx: MassTransferTransaction): Unit = {
+      utx.putIfNew(tx).resultE match {
+        case Right(_) | Left(_: AlreadyInTheState) => notifications.info(s"Payout for blocks ${new String(tx.attachment)} was sent. Tx id ${tx.id}")
+        case Left(value)                           => notifications.error(s"Error sending transaction: $value (tx = ${tx.json()})")
+      }
+    }
+
+    val unconfirmed = PayoutDB.unconfirmedTransactions(blockchain.height, settings.delay)
+    unconfirmed foreach {
+      case PayoutTransaction(txId, _, transaction, _) =>
+        blockchain.transactionHeight(Base58.decode(txId)) match {
+          case Some(txHeight) => PayoutDB.confirmTransaction(txId, txHeight)
+          case None           => commitTx(transaction)
+        }
+    }
+  }
+
+  def registerBlock(height: Int, wavesReward: Long): Unit =
+    PayoutDB.addMinedBlock(height, wavesReward)
 }
