@@ -12,9 +12,7 @@ wget https://github.com/msmolyakov/waves-node-tools-extension/releases/download/
 ```
 2. add to `/etc/waves/local.conf`
 ```
-waves.extensions = [
-  "im.mak.nodetools.NodeToolsExtension"
-]
+waves.extensions += "im.mak.nodetools.NodeToolsExtension"
 node-tools {
   webhook {
     url = "https://example.com/webhook/1234567890" # SPECIFY YOUR ENDPOINT
@@ -39,7 +37,7 @@ Payout is disabled by default. To enable, add to `local.conf` file:
 node-tools {
   payout {
     enable = yes
-    from-height = 123456789 # starting at what height pay lessors
+    from-height = 123456789 # starting at what height to pay lessors
     interval = 10000 # how often to pay
     delay = 2000 # delay after the interval until payout
     percent = 50 # which amount of mined Waves to payout for lessors
