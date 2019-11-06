@@ -19,6 +19,8 @@ object Payouts extends ScorexLogging {
   def initPayouts(settings: PayoutSettings, blockchain: Blockchain, utx: UtxPool, minerKey: KeyPair)(
       implicit notifications: NotificationService
   ): Unit = {
+    val minerAddress = minerKey.toAddress
+
     val currentHeight = blockchain.height
     if (!settings.enable || currentHeight < settings.fromHeight) return
 
@@ -29,17 +31,23 @@ object Payouts extends ScorexLogging {
     val toHeight   = currentHeight - 1
     if (toHeight < fromHeight) return
 
-    val minerAddress = minerKey.toAddress
-    val leases       = getLeasesAtHeight(blockchain, fromHeight, minerAddress)
+    def registerPayout(fromHeight: Int, toHeight: Int) = {
+      val leases       = getLeasesAtHeight(blockchain, fromHeight, minerAddress)
 
-    val generatingBalance = blockchain.balanceSnapshots(minerAddress, fromHeight, blockchain.lastBlockId.get).map(_.effectiveBalance).max
-    val wavesReward       = PayoutDB.calculateReward(fromHeight, toHeight)
-    val payoutAmount      = wavesReward * settings.percent / 100
+      val generatingBalance = blockchain.balanceSnapshots(minerAddress, fromHeight, blockchain.lastBlockId.get).map(_.effectiveBalance).max
+      val wavesReward       = PayoutDB.calculateReward(fromHeight, toHeight)
+      val payoutAmount      = wavesReward * settings.percent / 100
 
-    if (payoutAmount > 0) {
-      val payout = PayoutDB.addPayout(fromHeight, toHeight, payoutAmount, generatingBalance, leases)
-      createPayoutTransactions(payout, leases.map(_._2), settings, utx, blockchain, minerKey)
-      notifications.info(s"Registering payout [$fromHeight-$toHeight]: ${Format.waves(payoutAmount)} of ${Format.waves(wavesReward)} Waves")
+      if (payoutAmount > 0) {
+        val payout = PayoutDB.addPayout(fromHeight, toHeight, payoutAmount, generatingBalance, leases)
+        createPayoutTransactions(payout, leases.map(_._2), settings, utx, blockchain, minerKey)
+        notifications.info(s"Registering payout [$fromHeight-$toHeight]: ${Format.waves(payoutAmount)} of ${Format.waves(wavesReward)} Waves")
+      }
+    }
+
+    (fromHeight to toHeight).by(settings.interval).foreach { from =>
+      val to = math.min(from + settings.interval, toHeight)
+      registerPayout(from, to)
     }
   }
 
