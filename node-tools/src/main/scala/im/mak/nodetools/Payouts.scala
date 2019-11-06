@@ -106,8 +106,8 @@ object Payouts extends ScorexLogging {
   ): Unit = {
     def commitTx(transferTransaction: MassTransferTransaction): Unit = {
       utx.putIfNew(transferTransaction).resultE match {
-        case Right(_) | Left(_: AlreadyInTheState) => notifications.info(s"Transaction sent: $transferTransaction")
-        case Left(value)                           => notifications.error(s"Error sending transaction: $value (tx = $transferTransaction)")
+        case Right(_) | Left(_: AlreadyInTheState) => notifications.info(s"Transaction sent: ${transferTransaction.json()}")
+        case Left(value)                           => notifications.error(s"Error sending transaction: $value (tx = ${transferTransaction.json()})")
       }
     }
 

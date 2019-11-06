@@ -1,48 +1,14 @@
 package im.mak.nodetools
 
-import com.google.common.io.ByteStreams
 import com.wavesplatform.common.utils.Base58
 import com.wavesplatform.state.Blockchain
-import com.wavesplatform.transaction.lease.LeaseTransaction
 import com.wavesplatform.transaction.transfer.MassTransferTransaction
-import com.wavesplatform.transaction.{Transaction, TransactionParsers}
 import com.wavesplatform.utils.ScorexLogging
 
 //noinspection TypeAnnotation
-class PayoutDBMigrate extends ScorexLogging {
-  import io.getquill.{MappedEncoding, _}
-  lazy val ctx = new H2JdbcContext(SnakeCase, "node-tools.db.ctx")
+object PayoutDBMigrate extends ScorexLogging {
+  import PayoutDB._
   import ctx.{lift => liftQ, _}
-
-  private[this] implicit def transactionEncoding[T <: Transaction]: MappedEncoding[T, Array[Byte]] =
-    MappedEncoding[T, Array[Byte]](_.bytes())
-  private[this] implicit def transactionDecoding[T <: Transaction]: MappedEncoding[Array[Byte], T] =
-    MappedEncoding[Array[Byte], T](data => TransactionParsers.parseBytes(data).get.asInstanceOf[T])
-
-  type LeasesSnapshot = Seq[LeaseTransaction]
-  object LeasesSnapshot {
-    def toBytes(transactions: LeasesSnapshot): Array[Byte] = {
-      val dataOutput = ByteStreams.newDataOutput()
-      dataOutput.writeInt(transactions.length)
-      transactions.foreach { tx =>
-        val txBytes = tx.bytes()
-        dataOutput.writeInt(txBytes.length)
-        dataOutput.write(txBytes)
-      }
-      dataOutput.toByteArray
-    }
-
-    def fromBytes(bytes: Array[Byte]): LeasesSnapshot = {
-      val dataInput = ByteStreams.newDataInput(bytes)
-      val length    = dataInput.readInt()
-      for (_ <- 1 to length) yield {
-        val txLength = dataInput.readInt()
-        val txBytes  = new Array[Byte](txLength)
-        dataInput.readFully(txBytes)
-        TransactionParsers.parseBytes(txBytes).asInstanceOf[LeaseTransaction]
-      }
-    }
-  }
 
   case class MinedBlock(height: Int, reward: Long)
 
@@ -51,32 +17,19 @@ class PayoutDBMigrate extends ScorexLogging {
       fromHeight: Int,
       toHeight: Int,
       amount: Long,
-      assetId: Option[String],
       generatingBalance: Long,
       activeLeases: Array[Byte],
       txId: Option[String],
       txHeight: Option[Int],
       confirmed: Boolean
-  ) {
-    lazy val activeLeasesDecoded: LeasesSnapshot = LeasesSnapshot.fromBytes(activeLeases)
-  }
+  )
 
   case class PayoutTransaction(id: String, payoutId: Int, transaction: MassTransferTransaction, height: Option[Int])
-  case class Lease(id: String, transaction: LeaseTransaction, height: Int)
-  case class PayoutLease(id: Int, leaseId: String)
 
-  private[this] implicit val minedBlocksMeta        = schemaMeta[MinedBlock]("mined_blocks")
   private[this] implicit val payoutsMeta            = schemaMeta[Payout]("payouts")
   private[this] implicit val payoutTransactionsMeta = schemaMeta[PayoutTransaction]("payout_transactions")
-  private[this] implicit val leasesMeta             = schemaMeta[Lease]("leases")
-  private[this] implicit val payoutLeasesMeta       = schemaMeta[PayoutLease]("payout_leases")
 
   def migratePayouts(b: Blockchain): Unit = ctx.transaction {
-    executeAction("""
-                    |alter table payouts
-                    |    alter column reward rename to amount;
-                    |""".stripMargin)
-
     val oldPayouts = run(quote(query[Payout].filter(p => query[PayoutTransaction].filter(_.payoutId == p.id).isEmpty)))
     val withTxs = oldPayouts.map(
       p =>

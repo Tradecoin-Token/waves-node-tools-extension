@@ -29,11 +29,13 @@ class NodeToolsExtension(context: ExtensionContext) extends Extension with Score
   override def start(): Unit = {
     import scala.concurrent.duration._
 
-    if (Try(context.settings.config.getBoolean("node-tools.db.migrate")).toOption.contains(true)) {
+    val stateVersion = PayoutDB.getVersion("payout_db").getOrElse(0)
+    require(stateVersion <= 2, "Unsupported version")
+    PayoutDB.setVersion("payout_db", 2)
+
+    if (stateVersion < 2) Try {
       log.info("Starting DB migration")
-      val migrate = new PayoutDBMigrate
-      migrate.migratePayouts(context.blockchain)
-      migrate.ctx.close()
+      PayoutDBMigrate.migratePayouts(context.blockchain)
       log.info("Migration finished")
     }
 
