@@ -47,7 +47,7 @@ class NodeToolsExtension(context: ExtensionContext) extends Extension with Score
     }
     notifications.info(s"$settings")
 
-    lastKnownHeight = context.blockchain.height //TODO read from db or set current
+    lastKnownHeight = PayoutDB.lastRegisteredHeight().getOrElse(context.blockchain.height)
     val generatingBalance = context.blockchain.generatingBalance(minerAddress)
 
     if (settings.notifications.startStop) {
