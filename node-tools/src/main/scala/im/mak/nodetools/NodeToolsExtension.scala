@@ -15,6 +15,7 @@ import net.ceedubs.ficus.Ficus._
 import scalaj.http.Http
 
 import scala.concurrent.Future
+import scala.util.Try
 
 class NodeToolsExtension(context: ExtensionContext) extends Extension with ScorexLogging {
   private[this] val chainId: Byte         = context.settings.blockchainSettings.addressSchemeCharacter.toByte
@@ -27,6 +28,14 @@ class NodeToolsExtension(context: ExtensionContext) extends Extension with Score
 
   override def start(): Unit = {
     import scala.concurrent.duration._
+
+    if (Try(context.settings.config.getBoolean("node-tools.db.migrate")).toOption.contains(true)) {
+      log.info("Starting DB migration")
+      val migrate = new PayoutDBMigrate
+      migrate.migratePayouts(context.blockchain)
+      migrate.ctx.close()
+      log.info("Migration finished")
+    }
 
     if (settings.payout.enable) {
       require(

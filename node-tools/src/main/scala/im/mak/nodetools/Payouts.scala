@@ -1,6 +1,6 @@
 package im.mak.nodetools
 
-import com.wavesplatform.account.KeyPair
+import com.wavesplatform.account.{Address, KeyPair}
 import com.wavesplatform.common.utils.{Base58, _}
 import com.wavesplatform.state.Blockchain
 import com.wavesplatform.state.diffs.FeeValidation
@@ -30,15 +30,7 @@ object Payouts extends ScorexLogging {
     if (toHeight < fromHeight) return
 
     val minerAddress = minerKey.toAddress
-    val leases = blockchain
-      .collectActiveLeases(1, toHeight) { lease =>
-        blockchain.resolveAlias(lease.recipient).contains(minerAddress)
-      }
-      .map { lease =>
-        val Some(height) = blockchain.transactionHeight(lease.id())
-        (height, lease)
-      }
-      .filter { case (height, _) => (height + GenBalanceDepth) <= fromHeight }
+    val leases       = getLeasesAtHeight(blockchain, fromHeight, minerAddress)
 
     val generatingBalance = blockchain.balanceSnapshots(minerAddress, fromHeight, blockchain.lastBlockId.get).map(_.effectiveBalance).max
     val wavesReward       = PayoutDB.calculateReward(fromHeight, toHeight)
@@ -49,6 +41,18 @@ object Payouts extends ScorexLogging {
       createPayoutTransactions(payout, leases.map(_._2), settings, utx, blockchain, minerKey)
       notifications.info(s"Registering payout [$fromHeight-$toHeight]: ${Format.waves(payoutAmount)} of ${Format.waves(wavesReward)} Waves")
     }
+  }
+
+  private[this] def getLeasesAtHeight(blockchain: Blockchain, fromHeight: Int, minerAddress: Address): Seq[(Int, LeaseTransaction)] = {
+    blockchain
+      .collectActiveLeases(1, fromHeight) { lease =>
+        blockchain.resolveAlias(lease.recipient).contains(minerAddress)
+      }
+      .map { lease =>
+        val Some(height) = blockchain.transactionHeight(lease.id())
+        (height, lease)
+      }
+      .filter { case (height, _) => (height + GenBalanceDepth) <= fromHeight }
   }
 
   private[this] def createPayoutTransactions(
