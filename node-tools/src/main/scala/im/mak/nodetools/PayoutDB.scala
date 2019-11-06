@@ -5,17 +5,15 @@ import com.wavesplatform.transaction.transfer.MassTransferTransaction
 import com.wavesplatform.transaction.{Transaction, TransactionParsers}
 import com.wavesplatform.utils.ScorexLogging
 
-import scala.util.Try
-
 //noinspection TypeAnnotation
 object PayoutDB extends ScorexLogging {
   import io.getquill.{MappedEncoding, _}
-  private[this] lazy val ctx = new H2JdbcContext(SnakeCase, "node-tools.db.ctx")
+  lazy val ctx = new H2JdbcContext(SnakeCase, "node-tools.db.ctx")
   import ctx.{lift => liftQ, _}
 
-  private[this] implicit def transactionEncoding[T <: Transaction]: MappedEncoding[T, Array[Byte]] =
+  implicit def transactionEncoding[T <: Transaction]: MappedEncoding[T, Array[Byte]] =
     MappedEncoding[T, Array[Byte]](_.bytes())
-  private[this] implicit def transactionDecoding[T <: Transaction]: MappedEncoding[Array[Byte], T] =
+  implicit def transactionDecoding[T <: Transaction]: MappedEncoding[Array[Byte], T] =
     MappedEncoding[Array[Byte], T](data => TransactionParsers.parseBytes(data).get.asInstanceOf[T])
 
   case class MinedBlock(height: Int, reward: Long)
@@ -31,12 +29,14 @@ object PayoutDB extends ScorexLogging {
   case class PayoutTransaction(id: String, payoutId: Int, transaction: MassTransferTransaction, height: Option[Int])
   case class Lease(id: String, transaction: LeaseTransaction, height: Int)
   case class PayoutLease(id: Int, leaseId: String)
+  case class StateVersion(key: String, version: Int)
 
   private[this] implicit val minedBlocksMeta        = schemaMeta[MinedBlock]("mined_blocks")
   private[this] implicit val payoutsMeta            = schemaMeta[Payout]("payouts")
   private[this] implicit val payoutTransactionsMeta = schemaMeta[PayoutTransaction]("payout_transactions")
   private[this] implicit val leasesMeta             = schemaMeta[Lease]("leases")
   private[this] implicit val payoutLeasesMeta       = schemaMeta[PayoutLease]("payout_leases")
+  private[this] implicit val stateVersionMeta       = schemaMeta[StateVersion]("state_version")
 
   def addMinedBlock(height: Index, reward: Long): Unit = {
     val exists = quote(query[MinedBlock].filter(_.height == liftQ(height)).nonEmpty)
@@ -172,5 +172,15 @@ object PayoutDB extends ScorexLogging {
       run(resetPayoutTxs)
       run(removeInvPayouts)
     }
+  }
+
+  def getVersion(key: String): Option[Int] = {
+    val q = quote(query[StateVersion].filter(_.key == liftQ(key)).map(_.version))
+    run(q).headOption
+  }
+
+  def setVersion(key: String, value: Int): Unit = {
+    val q = quote(query[StateVersion].filter(_.key == liftQ(key)).update(_.version -> liftQ(value)))
+    run(q)
   }
 }

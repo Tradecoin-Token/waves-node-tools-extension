@@ -33,3 +33,9 @@ create table if not exists payout_leases
     id       int4 references payouts (id),
     lease_id char(44) references leases (id)
 );
+
+create table if not exists state_version
+(
+    key     varchar(255) primary key not null,
+    version int4
+);
