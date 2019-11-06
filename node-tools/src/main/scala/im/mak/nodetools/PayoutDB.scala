@@ -5,6 +5,8 @@ import com.wavesplatform.transaction.transfer.MassTransferTransaction
 import com.wavesplatform.transaction.{Transaction, TransactionParsers}
 import com.wavesplatform.utils.ScorexLogging
 
+import scala.util.Try
+
 //noinspection TypeAnnotation
 object PayoutDB extends ScorexLogging {
   import io.getquill.{MappedEncoding, _}
@@ -53,6 +55,13 @@ object PayoutDB extends ScorexLogging {
       if (run(exists)) run(update)
       else run(insert)
     }
+  }
+
+  def lastRegisteredHeight(): Option[Int] = {
+    val q = quote {
+      query[MinedBlock].map(_.height).max
+    }
+    run(q)
   }
 
   def calculateReward(fromHeight: Int, toHeight: Int): Long = {
