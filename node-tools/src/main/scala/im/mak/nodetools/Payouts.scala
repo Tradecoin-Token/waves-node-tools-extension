@@ -100,7 +100,7 @@ object Payouts extends ScorexLogging {
           txTransfers.map(t => t.copy(amount = t.amount - (transactionFee / txTransfers.length)))
 
         MassTransferTransaction
-          .selfSigned(Asset.Waves, key, transfersWithoutFee, timestamp, transactionFee, Array.emptyByteArray)
+          .selfSigned(Asset.Waves, key, transfersWithoutFee, timestamp, transactionFee, s"${payout.fromHeight}-${payout.toHeight}".getBytes)
           .explicitGet()
       }
       .filter(_.transfers.nonEmpty)
