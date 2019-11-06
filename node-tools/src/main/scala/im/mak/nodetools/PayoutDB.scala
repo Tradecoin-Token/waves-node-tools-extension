@@ -131,7 +131,6 @@ object PayoutDB extends ScorexLogging {
       run(insertPayoutLeases(id, activeLeases.map(_._2.id().toString)))
       id
     }
-    log.info(s"Payout [$fromHeight-$toHeight] registered with id #$payoutId: ${Format.waves(amount)} Waves, ${activeLeases.length} leases)")
     Payout(payoutId, fromHeight, toHeight, amount, generatingBalance)
   }
 

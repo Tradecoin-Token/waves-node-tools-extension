@@ -45,7 +45,7 @@ object Payouts extends ScorexLogging {
       }
     }
 
-    (fromHeight to toHeight).by(settings.interval).foreach { from =>
+    (fromHeight to toHeight).by(settings.interval + 1).foreach { from =>
       val to = math.min(from + settings.interval, toHeight)
       registerPayout(from, to)
     }
