@@ -16,6 +16,7 @@ import scalaj.http.Http
 
 import scala.concurrent.Future
 import scala.util.Try
+import scala.util.matching.Regex
 
 class NodeToolsExtension(context: ExtensionContext) extends Extension with ScorexLogging {
   private[this] implicit def implicitContext: ExtensionContext = context
@@ -183,7 +184,7 @@ class NodeToolsExtension(context: ExtensionContext) extends Extension with Score
               }
           )
         )
-        .postData(settings.webhook.body.replaceAll("%s", text))
+        .postData(settings.webhook.body.replaceAll("%s", Regex.quoteReplacement(text)))
         .method(settings.webhook.method)
         .asString
     }

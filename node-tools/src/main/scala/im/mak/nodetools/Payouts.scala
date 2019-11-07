@@ -55,10 +55,10 @@ object Payouts extends ScorexLogging {
   def finishUnconfirmedPayouts(settings: PayoutSettings, key: KeyPair)(implicit context: Context, notifications: NotificationService): Unit = {
     import context.{blockchain, utx}
 
-    def commitTx(transferTransaction: MassTransferTransaction): Unit = {
-      utx.putIfNew(transferTransaction).resultE match {
-        case Right(_) | Left(_: AlreadyInTheState) => notifications.info(s"Transaction sent: ${transferTransaction.json()}")
-        case Left(value)                           => notifications.error(s"Error sending transaction: $value (tx = ${transferTransaction.json()})")
+    def commitTx(tx: MassTransferTransaction): Unit = {
+      utx.putIfNew(tx).resultE match {
+        case Right(_) | Left(_: AlreadyInTheState) => notifications.info(s"Payout for blocks ${new String(tx.attachment)} was sent. Tx id ${tx.id().base58}")
+        case Left(value)                           => notifications.error(s"Error sending transaction: $value (tx = ${tx.json()})")
       }
     }
 
@@ -121,7 +121,7 @@ object Payouts extends ScorexLogging {
           txTransfers.map(t => t.copy(amount = t.amount - (transactionFee / txTransfers.length)))
 
         MassTransferTransaction
-          .selfSigned(Asset.Waves, key, transfersWithoutFee, timestamp, transactionFee, Array.emptyByteArray)
+          .selfSigned(Asset.Waves, key, transfersWithoutFee, timestamp, transactionFee, s"${payout.fromHeight}-${payout.toHeight}".getBytes)
           .explicitGet()
       }
       .filter(_.transfers.nonEmpty)
