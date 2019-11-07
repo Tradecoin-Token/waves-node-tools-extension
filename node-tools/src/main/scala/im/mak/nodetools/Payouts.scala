@@ -115,7 +115,7 @@ object Payouts extends ScorexLogging {
   ): Unit = {
     def commitTx(tx: MassTransferTransaction): Unit = {
       utx.putIfNew(tx).resultE match {
-        case Right(_) | Left(_: AlreadyInTheState) => notifications.info(s"Payout for blocks ${new String(tx.attachment)} was sent. Tx id ${tx.id}")
+        case Right(_) | Left(_: AlreadyInTheState) => notifications.info(s"Payout for blocks ${new String(tx.attachment)} was sent. Tx id ${tx.id().base58}")
         case Left(value)                           => notifications.error(s"Error sending transaction: $value (tx = ${tx.json()})")
       }
     }
