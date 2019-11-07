@@ -18,6 +18,8 @@ import scala.concurrent.Future
 import scala.util.Try
 
 class NodeToolsExtension(context: ExtensionContext) extends Extension with ScorexLogging {
+  private[this] implicit def implicitContext: ExtensionContext = context
+
   private[this] val chainId: Byte         = context.settings.blockchainSettings.addressSchemeCharacter.toByte
   private[this] val minerKeyPair: KeyPair = context.wallet.privateKeyAccounts.head //TODO addresses with >= 1000 Waves
   private[this] val minerAddress: Address = Address.fromPublicKey(minerKeyPair.publicKey, chainId)
@@ -143,9 +145,7 @@ class NodeToolsExtension(context: ExtensionContext) extends Extension with Score
       if (reward > 0) notifications.info(s"Mined ${Format.waves(reward)} Waves ${blockUrl(lastKnownHeight)}")
 
       //TODO interval + delay
-      if (settings.payout.enable && height % settings.payout.interval == 0) {
-        Payouts.initPayouts(settings.payout, context.blockchain, context.utx, minerKeyPair)
-      }
+      if (settings.payout.enable) Payouts.initPayouts(settings.payout, minerKeyPair)
 
       Payouts.finishUnconfirmedPayouts(settings.payout, context.utx, context.blockchain, minerKeyPair)
     }
