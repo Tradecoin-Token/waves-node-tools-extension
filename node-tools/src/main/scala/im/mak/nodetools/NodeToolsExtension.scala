@@ -145,10 +145,9 @@ class NodeToolsExtension(context: ExtensionContext) extends Extension with Score
       val reward = miningRewardAt(lastKnownHeight)
       if (reward > 0) notifications.info(s"Mined ${Format.waves(reward)} Waves ${blockUrl(lastKnownHeight)}")
 
-      //TODO interval + delay
       if (settings.payout.enable) Payouts.initPayouts(settings.payout, minerKeyPair)
 
-      Payouts.finishUnconfirmedPayouts(settings.payout, context.utx, context.blockchain, minerKeyPair)
+      Payouts.finishUnconfirmedPayouts(settings.payout, minerKeyPair)
     }
 
     if (height < lastKnownHeight) {
