@@ -80,7 +80,7 @@ node-tools {
     start-stop = yes
     waves-received = yes
     leasing = yes
-    payouts = yes
+    mined-block = yes
   }
 }
 ```
@@ -99,5 +99,5 @@ If the Node address receives some Waves.
 ##### leasing
 If leased volume is changed.
 
-##### payouts
-If interval was finished or payouts was executed.
+##### mined-block
+If the node generated a block.

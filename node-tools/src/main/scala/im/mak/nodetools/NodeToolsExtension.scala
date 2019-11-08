@@ -48,7 +48,6 @@ class NodeToolsExtension(context: ExtensionContext) extends Extension with Score
         "Payout delay can't be less than Node's maxRollbackDepth parameter."
           + s" Delay: ${settings.payout.delay}, maxRollbackDepth: ${context.settings.dbSettings.maxRollbackDepth}"
       )
-      //TODO fromHeight / fromHeightDb / lastCheckedHeight
     }
     notifications.info(s"$settings")
 
@@ -84,7 +83,9 @@ class NodeToolsExtension(context: ExtensionContext) extends Extension with Score
   }
 
   override def shutdown(): Future[Unit] = Future {
-    notifications.info(s"Turned off at $lastKnownHeight height for miner ${minerAddress.stringRepr}")
+    if (settings.notifications.startStop) {
+      notifications.info(s"Turned off at $lastKnownHeight height for miner ${minerAddress.stringRepr}")
+    }
   }
 
   def checkNextBlock(): Unit = {
@@ -151,17 +152,19 @@ class NodeToolsExtension(context: ExtensionContext) extends Extension with Score
         if (wavesReceived > 0) notifications.info(s"Received ${Format.waves(wavesReceived)} Waves at ${blockUrl(lastKnownHeight)}")
       }
 
-      //TODO notifications.mined-block=yes
-      val reward = miningRewardAt(lastKnownHeight)
-      if (reward > 0) notifications.info(s"Mined ${Format.waves(reward)} Waves ${blockUrl(lastKnownHeight)}")
+      if (settings.notifications.minedBlock) {
+        val reward = miningRewardAt(lastKnownHeight)
+        if (reward > 0) notifications.info(s"Mined ${Format.waves(reward)} Waves ${blockUrl(lastKnownHeight)}")
+      }
 
-      if (settings.payout.enable) Payouts.initPayouts(settings.payout, minerKeyPair)
-
-      Payouts.finishUnconfirmedPayouts(settings.payout, minerKeyPair)
+      if (settings.payout.enable) {
+        Payouts.initPayouts(settings.payout, minerKeyPair)
+        Payouts.finishUnconfirmedPayouts(settings.payout, minerKeyPair)
+      }
     }
 
     if (height < lastKnownHeight) {
-      notifications.warn(s"Rollback detected, resetting payouts to height $height")
+      notifications.warn(s"Rollback detected from height $lastKnownHeight to $height. Missed payouts will be recalculated if enabled.")
       PayoutDB.processRollback(height)
     }
 
