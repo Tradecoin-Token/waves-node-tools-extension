@@ -30,9 +30,8 @@ object WebhookSettings {
 case class NotificationsSettings(
     startStop: Boolean,
     wavesReceived: Boolean,
-    leasing: Boolean
-  //TODO payouts
-  //TODO mined
+    leasing: Boolean,
+    minedBlock: Boolean
 )
 
 object NotificationsSettings {

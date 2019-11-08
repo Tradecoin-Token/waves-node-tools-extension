@@ -43,10 +43,11 @@ class NodeToolsExtension(context: ExtensionContext) extends Extension with Score
     }
 
     if (settings.payout.enable) {
-      require(settings.payout.delay >= context.settings.dbSettings.maxRollbackDepth,
+      require(
+        settings.payout.delay >= context.settings.dbSettings.maxRollbackDepth,
         "Payout delay can't be less than Node's maxRollbackDepth parameter."
-          + s" Delay: ${settings.payout.delay}, maxRollbackDepth: ${context.settings.dbSettings.maxRollbackDepth}")
-      //TODO fromHeight / fromHeightDb / lastCheckedHeight
+          + s" Delay: ${settings.payout.delay}, maxRollbackDepth: ${context.settings.dbSettings.maxRollbackDepth}"
+      )
     }
     notifications.info(s"$settings")
 
@@ -82,7 +83,9 @@ class NodeToolsExtension(context: ExtensionContext) extends Extension with Score
   }
 
   override def shutdown(): Future[Unit] = Future {
-    notifications.info(s"Turned off at $lastKnownHeight height for miner ${minerAddress.stringRepr}")
+    if (settings.notifications.startStop) {
+      notifications.info(s"Turned off at $lastKnownHeight height for miner ${minerAddress.stringRepr}")
+    }
   }
 
   def checkNextBlock(): Unit = {
@@ -97,12 +100,14 @@ class NodeToolsExtension(context: ExtensionContext) extends Extension with Score
       case _ => 0L
     }
 
-    val height = context.blockchain.height - 1
+    val height = context.blockchain.height
+    (lastKnownHeight until height).foreach { height =>
+      val reward = miningRewardAt(height)
+      Payouts.registerBlock(height, reward)
+    }
 
     if (height == lastKnownHeight + 1) { // otherwise, most likely, the node isn't yet synchronized
       val block = context.blockchain.blockAt(lastKnownHeight).get
-
-      Payouts.registerBlock(height, miningRewardAt(height))
 
       if (settings.notifications.leasing) {
         val leased = block.transactionData.collect {
@@ -133,25 +138,33 @@ class NodeToolsExtension(context: ExtensionContext) extends Extension with Score
               case t if t.address.isMiner => t.amount
             }.sum
           case is: InvokeScriptTransaction if context.settings.dbSettings.storeInvokeScriptResults =>
-            context.blockchain.invokeScriptResult(TransactionId(is.id())).right.get.transfers.collect {
-              case pmt if pmt.address.isMiner && pmt.asset == Waves => pmt.amount
-            }.sum
+            context.blockchain
+              .invokeScriptResult(TransactionId(is.id()))
+              .right
+              .get
+              .transfers
+              .collect {
+                case pmt if pmt.address.isMiner && pmt.asset == Waves => pmt.amount
+              }
+              .sum
         }.sum
 
         if (wavesReceived > 0) notifications.info(s"Received ${Format.waves(wavesReceived)} Waves at ${blockUrl(lastKnownHeight)}")
       }
 
-      //TODO notifications.mined-block=yes
-      val reward = miningRewardAt(lastKnownHeight)
-      if (reward > 0) notifications.info(s"Mined ${Format.waves(reward)} Waves ${blockUrl(lastKnownHeight)}")
+      if (settings.notifications.minedBlock) {
+        val reward = miningRewardAt(lastKnownHeight)
+        if (reward > 0) notifications.info(s"Mined ${Format.waves(reward)} Waves ${blockUrl(lastKnownHeight)}")
+      }
 
-      if (settings.payout.enable) Payouts.initPayouts(settings.payout, minerKeyPair)
-
-      Payouts.finishUnconfirmedPayouts(settings.payout, minerKeyPair)
+      if (settings.payout.enable) {
+        Payouts.initPayouts(settings.payout, minerKeyPair)
+        Payouts.finishUnconfirmedPayouts(settings.payout, minerKeyPair)
+      }
     }
 
     if (height < lastKnownHeight) {
-      notifications.warn(s"Rollback detected, resetting payouts to height $height")
+      notifications.warn(s"Rollback detected from height $lastKnownHeight to $height. Missed payouts will be recalculated if enabled.")
       PayoutDB.processRollback(height)
     }
 
