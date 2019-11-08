@@ -12,8 +12,8 @@ The extension assumes that you're using the v1.1.5 node (or which is specified i
 If your node is installed from `.deb` package:
 1. download `.deb` package of the extension and install it with the following commands:
 ```bash
-wget https://github.com/msmolyakov/waves-node-tools-extension/releases/download/v1.1.5-0.4/node-tools_1.1.5-0.4.deb
-sudo dpkg -i node-tools_1.1.5-0.4.deb
+wget https://github.com/msmolyakov/waves-node-tools-extension/releases/download/v1.1.5-0.5/node-tools_1.1.5-0.5.deb
+sudo dpkg -i node-tools_1.1.5-0.5.deb
 ```
 2. add to `/etc/waves/local.conf`
 ```hocon
@@ -142,9 +142,9 @@ By default, you can find this file in the `/var/lib/waves/node-tools` directory.
 ## How to update
 
 ```bash
-wget https://github.com/msmolyakov/waves-node-tools-extension/releases/download/v1.1.5-0.4/node-tools_1.1.5-0.4.deb
+wget https://github.com/msmolyakov/waves-node-tools-extension/releases/download/v1.1.5-0.5/node-tools_1.1.5-0.5.deb
 sudo apt remove node-tools
-sudo dpkg -i node-tools_1.1.5-0.4.deb
+sudo dpkg -i node-tools_1.1.5-0.5.deb
 ```
 
 These commands remove only binaries of this extension. Database with payouts information will be kept.
