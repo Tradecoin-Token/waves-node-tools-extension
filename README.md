@@ -2,26 +2,33 @@
 
 This node extension allows miner to automate payouts for its lessors and to receive notifications about mining progress.
 
+## Prerequisites
+
+The extension assumes that you're using the v1.1.5 node (or which is specified in the extension version).
+
 ## How to install
 
 ### On Debian-based Linux
 If your node is installed from `.deb` package:
-1. download `.deb` package of the extension and install it
-```
-wget https://github.com/msmolyakov/waves-node-tools-extension/releases/download/v1.1.5-0.4/node-tools_1.1.5-0.4.deb && sudo dpkg -i node-tools_1.1.5-0.4.deb
+1. download `.deb` package of the extension and install it with the following commands:
+```bash
+wget https://github.com/msmolyakov/waves-node-tools-extension/releases/download/v1.1.5-0.4/node-tools_1.1.5-0.4.deb
+sudo dpkg -i node-tools_1.1.5-0.4.deb
 ```
 2. add to `/etc/waves/local.conf`
-```
+```hocon
 waves.extensions += "im.mak.nodetools.NodeToolsExtension"
 node-tools {
   webhook {
-    url = "https://example.com/webhook/1234567890" # SPECIFY YOUR ENDPOINT
+    url = "SPECIFY YOUR ENDPOINT" # example: "https://example.com/webhook/1234567890"
+    method = "POST"
+    headers = [] # example: [ "Content-Type: application/json; charset=utf-8", "Authorization: Basic dXNlcjpwYXNzd29yZA==" ]
     body = """%s"""
   }
 }
 ```
 3. restart the node:
-```
+```bash
 sudo systemctl restart waves
 ```
 
@@ -33,13 +40,13 @@ If the node starts up successfully, you will receive a log message and a notific
 
 Payout is disabled by default. To enable, add to `local.conf` file:
 
-```
+```hocon
 node-tools {
   payout {
     enable = yes
     from-height = 123456789 # starting at what height to pay lessors
-    interval = 10000 # how often to pay
-    delay = 2000 # delay after the interval until payout
+    interval = 10000 # how often (in blocks) to pay
+    delay = 2000 # delay in blocks after the interval until payout
     percent = 50 # which amount of mined Waves to payout for lessors
   }
 }
@@ -74,7 +81,7 @@ You can read the full list of properties in the [reference.conf](node-tools/src/
 The extension notifies you about reward of each block it has generated.
 
 Other types of notifications can be enabled in conf file:
-```
+```hocon
 node-tools {
   notifications {
     start-stop = yes
@@ -82,6 +89,7 @@ node-tools {
     leasing = yes
     mined-block = yes
   }
+  block-url = "https://wavesexplorer.com/blocks/%s"
 }
 ```
 
@@ -101,3 +109,42 @@ If leased volume is changed.
 
 ##### mined-block
 If the node generated a block.
+
+##### Customize the url to info about generated block
+
+When the extension sends message about mined block, it provides url to this block. By default it's url to the Waves Explorer for Mainnet.
+
+You can change this url to yor own in the `block-url` field. For example:
+- Explorer for Testnet `"https://wavesexplorer.com/testnet/blocks/%s"`
+- REST API for Mainnet `"https://nodes.wavesnodes.com/blocks/headers/at/%s"`
+- REST API of your local node (if enabled) `"http://127.0.0.1:6869/blocks/headers/at/%s"`
+
+### Database
+
+The extension stores information about all payouts in the local database by default. Default settings:
+```hocon
+db {
+    path = ${user.home}/node-tools/data
+    path = ${?WAVES_MNEXT_DB}
+
+    ctx {
+      dataSourceClassName = org.h2.jdbcx.JdbcDataSource
+      dataSource.url = "jdbc:h2:file:"${node-tools.db.path}";INIT=RUNSCRIPT FROM 'classpath:mnext-init.sql'"
+      dataSource.user = sa
+    }
+  }
+```
+
+By default, you can find this file in the `/var/lib/waves/node-tools` directory.
+
+**DO NOT DELETE THIS DATABASE IF YOU DO NOT WANT TO LOSE INFORMATION ABOUT ALL YOUR PAYMENTS!**
+
+## How to update
+
+```bash
+wget https://github.com/msmolyakov/waves-node-tools-extension/releases/download/v1.1.5-0.4/node-tools_1.1.5-0.4.deb
+sudo apt remove node-tools
+sudo dpkg -i node-tools_1.1.5-0.4.deb
+```
+
+These commands remove only binaries of this extension. Database with payouts information will be kept.
