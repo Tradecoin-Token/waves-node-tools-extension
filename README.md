@@ -123,7 +123,8 @@ You can change this url to yor own in the `block-url` field. For example:
 
 The extension stores information about all payouts in the local database by default. Default settings:
 ```hocon
-db {
+node-tools {
+  db {
     path = ${user.home}/node-tools/data
     path = ${?WAVES_MNEXT_DB}
 
@@ -133,6 +134,7 @@ db {
       dataSource.user = sa
     }
   }
+}
 ```
 
 By default, you can find this file in the `/var/lib/waves/node-tools` directory.
