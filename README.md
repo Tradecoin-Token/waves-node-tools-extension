@@ -23,7 +23,7 @@ node-tools {
     url = "SPECIFY YOUR ENDPOINT" # example: "https://example.com/webhook/1234567890"
     method = "POST"
     headers = [] # example: [ "Content-Type: application/json; charset=utf-8", "Authorization: Basic dXNlcjpwYXNzd29yZA==" ]
-    body = """%s"""
+    body = "%s" # example for Integram: """{"text":"%s"}"""
   }
 }
 ```
