@@ -34,13 +34,8 @@ class NodeToolsExtension(context: ExtensionContext) extends Extension with Score
 
     val stateVersion = PayoutDB.getVersion("payout_db").getOrElse(0)
     require(stateVersion <= 2, "Unsupported version")
+    if (stateVersion < 2) PayoutDBMigrate.migratePayouts(context.blockchain)
     PayoutDB.setVersion("payout_db", 2)
-
-    if (stateVersion < 2) Try {
-      log.info("Starting DB migration")
-      PayoutDBMigrate.migratePayouts(context.blockchain)
-      log.info("Migration finished")
-    }
 
     if (settings.payout.enable) {
       require(
