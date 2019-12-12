@@ -67,7 +67,7 @@ object Payouts extends ScorexLogging {
       case PayoutTransaction(txId, _, transaction, _) =>
         blockchain.transactionHeight(Base58.decode(txId)) match {
           case Some(txHeight) => PayoutDB.confirmTransaction(txId, txHeight)
-          case None           => commitTx(transaction)
+          case _              => commitTx(transaction)
         }
     }
   }

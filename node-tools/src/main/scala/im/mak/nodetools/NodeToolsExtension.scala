@@ -114,7 +114,7 @@ class NodeToolsExtension(context: ExtensionContext) extends Extension with Score
           case tx: LeaseCancelTransaction =>
             context.blockchain.leaseDetails(tx.leaseId) match {
               case Some(lease) if lease.recipient.isMiner => lease.amount
-              case None                                   => 0
+              case _                                      => 0
             }
         }.sum
 
