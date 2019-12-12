@@ -47,7 +47,7 @@ object PayoutDBMigrate extends ScorexLogging {
               val tx = b.transactionInfo(Base58.decode(txId)).map(_._2)
               p -> tx
 
-            case None =>
+            case _ =>
               p -> None
           }
       )
@@ -69,7 +69,7 @@ object PayoutDBMigrate extends ScorexLogging {
               run(addTransaction(p.id, mtt))
             case Some(tx) =>
               sys.error(s"Not mass transfer: $tx")
-            case None =>
+            case _ =>
               log.warn(s"Transaction for $p not found, removing")
               run(delPayout(p.id))
           }
