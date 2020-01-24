@@ -30,8 +30,8 @@ create table if not exists leases
 
 create table if not exists payout_leases
 (
-    id       int4 references payouts (id),
-    lease_id char(44) references leases (id)
+    id       int4 references payouts (id) on delete cascade,
+    lease_id char(44) references leases (id) on delete cascade
 );
 
 create table if not exists state_version

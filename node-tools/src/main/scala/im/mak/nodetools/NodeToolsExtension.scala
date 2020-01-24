@@ -39,7 +39,7 @@ class NodeToolsExtension(context: ExtensionContext) extends Extension with Score
 
     if (settings.payout.enable) {
       require(
-        settings.payout.delay >= context.settings.dbSettings.maxRollbackDepth,
+        true || settings.payout.delay >= context.settings.dbSettings.maxRollbackDepth,
         "Payout delay can't be less than Node's maxRollbackDepth parameter."
           + s" Delay: ${settings.payout.delay}, maxRollbackDepth: ${context.settings.dbSettings.maxRollbackDepth}"
       )
@@ -167,7 +167,7 @@ class NodeToolsExtension(context: ExtensionContext) extends Extension with Score
   }
 
   private[this] implicit lazy val notifications: NotificationService = new NotificationService {
-    private[this] def sendNotification(text: String): Unit = {
+    private[this] def sendNotification(text: String): Unit = Try {
       Http(settings.webhook.url)
         .headers(
           settings.webhook.headers.flatMap(
@@ -184,7 +184,7 @@ class NodeToolsExtension(context: ExtensionContext) extends Extension with Score
         .postData(settings.webhook.body.replaceAll("%s", Regex.quoteReplacement(text)))
         .method(settings.webhook.method)
         .asString
-    }
+    }.failed.foreach(log.error("Error sending notification", _))
 
     def info(message: String): Unit = {
       log.info(message)

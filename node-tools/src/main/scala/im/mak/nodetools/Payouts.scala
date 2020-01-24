@@ -39,7 +39,7 @@ object Payouts extends ScorexLogging {
       val wavesReward       = PayoutDB.calculateReward(from, to)
       val payoutAmount      = wavesReward * settings.percent / 100
 
-      if (payoutAmount > 0) {
+      if (payoutAmount > 0 && leases.nonEmpty) {
         val payout = PayoutDB.addPayout(from, to, payoutAmount, generatingBalance, leases)
         createPayoutTransactions(context.blockchain, context.time, payout, leases.map(_._2), settings, minerKey)
         notifications.info(s"Registering payout [$from-$to]: ${Format.waves(payoutAmount)} of ${Format.waves(wavesReward)} Waves")
@@ -57,8 +57,9 @@ object Payouts extends ScorexLogging {
 
     def commitTx(tx: MassTransferTransaction): Unit = {
       utx.putIfNew(tx).resultE match {
-        case Right(_) | Left(_: AlreadyInTheState) => notifications.info(s"Payout for blocks ${new String(tx.attachment)} was sent. Tx id ${tx.id().base58}")
-        case Left(value)                           => notifications.error(s"Error sending transaction: $value (tx = ${tx.json()})")
+        case Right(_) | Left(_: AlreadyInTheState) =>
+          notifications.info(s"Payout for blocks ${new String(tx.attachment)} was sent. Tx id ${tx.id().base58}")
+        case Left(value) => notifications.error(s"Error sending transaction: $value (tx = ${tx.json()})")
       }
     }
 
@@ -118,7 +119,9 @@ object Payouts extends ScorexLogging {
         }
 
         val transfersWithoutFee =
-          txTransfers.map(t => t.copy(amount = t.amount - (transactionFee / txTransfers.length)))
+          txTransfers
+            .map(t => t.copy(amount = t.amount - (transactionFee / txTransfers.length)))
+            .filter(_.amount > 0)
 
         MassTransferTransaction
           .selfSigned(Asset.Waves, key, transfersWithoutFee, timestamp, transactionFee, s"${payout.fromHeight}-${payout.toHeight}".getBytes)
