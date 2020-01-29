@@ -35,15 +35,16 @@ class NodeToolsExtension(context: ExtensionContext) extends Extension with Score
     val stateVersion = PayoutDB.getVersion("payout_db").getOrElse(0)
     require(stateVersion <= 2, "Unsupported version")
     if (stateVersion < 2) PayoutDBMigrate.migratePayouts(context.blockchain)
-    PayoutDB.setVersion("payout_db", 2)
+    if (stateVersion < 3) PayoutDBMigrate.fixConstraints()
+    PayoutDB.setVersion("payout_db", 3)
 
-    if (settings.payout.enable) {
-      require(
-        settings.payout.delay >= context.settings.dbSettings.maxRollbackDepth,
-        "Payout delay can't be less than Node's maxRollbackDepth parameter."
-          + s" Delay: ${settings.payout.delay}, maxRollbackDepth: ${context.settings.dbSettings.maxRollbackDepth}"
-      )
-    }
+//    if (settings.payout.enable) {
+//      require(
+//        settings.payout.delay >= context.settings.dbSettings.maxRollbackDepth,
+//        "Payout delay can't be less than Node's maxRollbackDepth parameter."
+//          + s" Delay: ${settings.payout.delay}, maxRollbackDepth: ${context.settings.dbSettings.maxRollbackDepth}"
+//      )
+//    }
     notifications.info(s"$settings")
 
     lastKnownHeight = PayoutDB.lastRegisteredHeight().getOrElse(context.blockchain.height)
@@ -85,7 +86,7 @@ class NodeToolsExtension(context: ExtensionContext) extends Extension with Score
 
   def checkNextBlock(): Unit = {
     def miningRewardAt(height: Int): Long = context.blockchain.blockAt(height) match {
-      case Some(block) if Address.fromPublicKey(block.getHeader().signerData.generator, chainId).isMiner =>
+      case Some(block) if Address.fromPublicKey(block.header.generator, chainId).isMiner =>
         val blockFee     = context.blockchain.totalFee(height).getOrElse(0L)
         val prevBlockFee = context.blockchain.totalFee(height - 1).getOrElse(0L)
         val blockReward  = context.blockchain.blockReward(height).getOrElse(0L)
@@ -108,7 +109,7 @@ class NodeToolsExtension(context: ExtensionContext) extends Extension with Score
         val leased = block.transactionData.collect {
           case tx: LeaseTransaction =>
             if (tx.recipient.isMiner) tx.amount
-            else 0
+            else 0L
         }.sum
         val canceled = block.transactionData.collect {
           case tx: LeaseCancelTransaction =>
@@ -167,7 +168,7 @@ class NodeToolsExtension(context: ExtensionContext) extends Extension with Score
   }
 
   private[this] implicit lazy val notifications: NotificationService = new NotificationService {
-    private[this] def sendNotification(text: String): Unit = {
+    private[this] def sendNotification(text: String): Unit = Try {
       Http(settings.webhook.url)
         .headers(
           settings.webhook.headers.flatMap(
@@ -184,7 +185,7 @@ class NodeToolsExtension(context: ExtensionContext) extends Extension with Score
         .postData(settings.webhook.body.replaceAll("%s", Regex.quoteReplacement(text)))
         .method(settings.webhook.method)
         .asString
-    }
+    }//.failed.foreach(log.error("Error sending notification", _))
 
     def info(message: String): Unit = {
       log.info(message)

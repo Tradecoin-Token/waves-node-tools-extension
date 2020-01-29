@@ -12,7 +12,7 @@ import sbt.internal.inc.ReflectUtilities
 import sbtcrossproject.CrossPlugin.autoImport.{CrossType, crossProject}
 
 lazy val lang =
-  crossProject(JSPlatform, JVMPlatform)
+  crossProject(JVMPlatform)
     .withoutSuffixFor(JVMPlatform)
     .crossType(CrossType.Full)
     .settings(

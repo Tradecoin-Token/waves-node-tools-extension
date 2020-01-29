@@ -159,17 +159,25 @@ object PayoutDB extends ScorexLogging {
       query[PayoutTransaction].filter(p => p.height.exists(_ > liftQ(height))).update(_.height -> None)
     }
 
-    val removeInvPayouts = quote {
-      query[Payout].filter { p =>
-        val txs = query[PayoutTransaction].filter(t => t.payoutId == p.id && t.height.nonEmpty)
-        p.toHeight > liftQ(height) && txs.isEmpty
-      }.delete
+    val getInvPayouts = quote {
+      query[Payout]
+        .map { p =>
+          val txs = query[PayoutTransaction].filter(t => t.payoutId == p.id && t.height.nonEmpty)
+          (p.id, p.toHeight, txs.size)
+        }
+    }
+
+    def deleteInvPayouts(ids: Seq[Int]) = quote {
+      query[Payout]
+        .filter(p => liftQuery(ids).contains(p.id))
+        .delete
     }
 
     ctx.transaction {
       run(removeBlocks)
       run(resetPayoutTxs)
-      run(removeInvPayouts)
+      val invPayouts = run(getInvPayouts).collect { case (id, th, 0) if th > height => id}
+      run(deleteInvPayouts(invPayouts))
     }
   }
 

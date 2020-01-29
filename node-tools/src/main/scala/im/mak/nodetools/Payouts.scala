@@ -5,10 +5,10 @@ import com.wavesplatform.common.utils.{Base58, _}
 import com.wavesplatform.extensions.Context
 import com.wavesplatform.state.Blockchain
 import com.wavesplatform.state.diffs.FeeValidation
-import com.wavesplatform.transaction.Asset
+import com.wavesplatform.transaction.{Asset, TxVersion}
 import com.wavesplatform.transaction.TxValidationError.AlreadyInTheState
 import com.wavesplatform.transaction.lease.LeaseTransaction
-import com.wavesplatform.transaction.transfer.MassTransferTransaction
+import com.wavesplatform.transaction.transfer.{Attachment, MassTransferTransaction}
 import com.wavesplatform.utils.{ScorexLogging, Time}
 import im.mak.nodetools.PayoutDB.{Payout, PayoutTransaction}
 import im.mak.nodetools.settings.PayoutSettings
@@ -57,8 +57,14 @@ object Payouts extends ScorexLogging {
 
     def commitTx(tx: MassTransferTransaction): Unit = {
       utx.putIfNew(tx).resultE match {
-        case Right(_) | Left(_: AlreadyInTheState) => notifications.info(s"Payout for blocks ${new String(tx.attachment)} was sent. Tx id ${tx.id().base58}")
-        case Left(value)                           => notifications.error(s"Error sending transaction: $value (tx = ${tx.json()})")
+        case Right(_) | Left(_: AlreadyInTheState) =>
+          val attachmentStr = tx.attachment match {
+            case Some(Attachment.Bin(bytes)) => new String(bytes)
+            case Some(Attachment.Str(str)) => str
+            case _ => "???"
+          }
+          notifications.info(s"Payout for blocks $attachmentStr was sent. Tx id ${tx.id()}")
+        case Left(value) => notifications.error(s"Error sending transaction: $value (tx = ${tx.json()})")
       }
     }
 
@@ -113,15 +119,23 @@ object Payouts extends ScorexLogging {
       .grouped(100)
       .map { txTransfers =>
         val transactionFee: Long = {
-          val dummyTx = MassTransferTransaction(Asset.Waves, key, txTransfers, timestamp, 0, Array.emptyByteArray, Nil)
-          FeeValidation.getMinFee(blockchain, blockchain.height, dummyTx).fold(_ => FeeValidation.FeeUnit * 2, _.minFeeInWaves)
+          val dummyTx = MassTransferTransaction(TxVersion.V1, key, Asset.Waves, txTransfers, 0, timestamp, None, Nil)
+          FeeValidation.getMinFee(blockchain, dummyTx).fold(_ => FeeValidation.FeeUnit * 2, _.minFeeInWaves)
         }
 
         val transfersWithoutFee =
           txTransfers.map(t => t.copy(amount = t.amount - (transactionFee / txTransfers.length)))
 
         MassTransferTransaction
-          .selfSigned(Asset.Waves, key, transfersWithoutFee, timestamp, transactionFee, s"${payout.fromHeight}-${payout.toHeight}".getBytes)
+          .selfSigned(
+            TxVersion.V1,
+            key,
+            Asset.Waves,
+            transfersWithoutFee,
+            transactionFee,
+            timestamp,
+            Some(Attachment.Bin(s"${payout.fromHeight}-${payout.toHeight}".getBytes))
+          )
           .explicitGet()
       }
       .filter(_.transfers.nonEmpty)
