@@ -4,7 +4,7 @@ This node extension allows miner to automate payouts for its lessors and to rece
 
 ## Prerequisites
 
-The extension assumes that you're using the v1.1.5 node (or which is specified in the extension version).
+The extension assumes that you're using the v1.1.7 node (or which is specified in the extension version).
 
 ## How to install
 
@@ -12,8 +12,8 @@ The extension assumes that you're using the v1.1.5 node (or which is specified i
 If your node is installed from `.deb` package:
 1. download `.deb` package of the extension and install it with the following commands:
 ```bash
-wget https://github.com/msmolyakov/waves-node-tools-extension/releases/download/v1.1.5-0.5.2/node-tools_1.1.5-0.5.2.deb
-sudo dpkg -i node-tools_1.1.5-0.5.2.deb
+wget https://github.com/msmolyakov/waves-node-tools-extension/releases/download/v1.1.7-0.5.3/node-tools_1.1.7-0.5.3.deb
+sudo dpkg -i node-tools_1.1.7-0.5.3.deb
 ```
 2. add to `/etc/waves/local.conf`
 ```hocon
@@ -144,9 +144,9 @@ By default, you can find this file in the `/var/lib/waves/node-tools` directory.
 ## How to update
 
 ```bash
-wget https://github.com/msmolyakov/waves-node-tools-extension/releases/download/v1.1.5-0.5.2/node-tools_1.1.5-0.5.2.deb
+wget https://github.com/msmolyakov/waves-node-tools-extension/releases/download/v1.1.7-0.5.3/node-tools_1.1.7-0.5.3.deb
 sudo apt remove node-tools
-sudo dpkg -i node-tools_1.1.5-0.5.2.deb
+sudo dpkg -i node-tools_1.1.7-0.5.3.deb
 ```
 
 These commands remove only binaries of this extension. Database with payouts information will be kept.
