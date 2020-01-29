@@ -82,4 +82,16 @@ object PayoutDBMigrate extends ScorexLogging {
       log.info("Migration finished")
     }
   }
+
+  def fixConstraints(): Unit = ctx.transaction {
+    executeAction("""
+                    |alter table payout_leases drop constraint CONSTRAINT_1 if exists;
+                    |alter table payout_leases drop constraint CONSTRAINT_1A if exists;
+                    |alter table payout_leases add constraint CONSTRAINT_1 foreign key (id) references payouts(id) on delete cascade;
+                    |alter table payout_leases add constraint CONSTRAINT_1A foreign key (lease_id) references leases(id) on delete cascade;
+                    |
+                    |alter table payout_transactions drop constraint CONSTRAINT_49 if exists;
+                    |alter table payout_transactions add constraint CONSTRAINT_49 foreign key (payout_id) references payouts(id) on delete cascade;
+                    |""".stripMargin)
+  }
 }
