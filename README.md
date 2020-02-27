@@ -1,3 +1,7 @@
+[![Compatible with Node v1.1.9](https://img.shields.io/badge/Compatible%20with%20Node-v1.1.9-brightgreen)](https://github.com/wavesplatform/Waves/releases/tag/v1.1.9)
+[![Compatible with Node v1.1.8](https://img.shields.io/badge/Compatible%20with%20Node-v1.1.8-brightgreen)](https://github.com/wavesplatform/Waves/releases/tag/v1.1.8)
+[![Compatible with Node v1.1.7](https://img.shields.io/badge/Compatible%20with%20Node-v1.1.7-brightgreen)](https://github.com/wavesplatform/Waves/releases/tag/v1.1.7)
+
 # Waves Node Tools Extension
 
 This node extension allows miner to automate payouts for its lessors and to receive notifications about mining progress.
